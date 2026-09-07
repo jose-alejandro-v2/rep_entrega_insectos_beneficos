@@ -154,6 +154,49 @@ public class FotoRequerimientoService {
         fotoRepository.delete(foto);
     }
 
+    /**
+     * Retorna un InputStream del archivo de imagen en disco para servirlo
+     * como contenido binario (endpoint GET /imagen).
+     *
+     * @return tupla [InputStream, contentType, tamanoBytes]
+     */
+    public FotoBinaria getFotoStream(Long requerimientoId, Long fotoId) {
+        FotoRequerimiento foto = fotoRepository.findByIdOptional(fotoId)
+                .orElseThrow(() -> new ApiException(Response.Status.NOT_FOUND,
+                        "FOTO_NO_ENCONTRADA", "Foto no encontrada"));
+
+        if (!foto.getRequerimiento().getId().equals(requerimientoId)) {
+            throw new ApiException(Response.Status.BAD_REQUEST,
+                    "FOTO_NO_PERTENECE", "La foto no pertenece a este requerimiento");
+        }
+
+        Path ruta = Paths.get(foto.getRuta());
+        if (!Files.exists(ruta)) {
+            throw new ApiException(Response.Status.NOT_FOUND,
+                    "ARCHIVO_NO_ENCONTRADO", "El archivo de imagen no existe en el servidor");
+        }
+
+        try {
+            return new FotoBinaria(
+                    Files.newInputStream(ruta),
+                    foto.getContentType(),
+                    foto.getTamanoBytes(),
+                    foto.getNombreArchivo());
+        } catch (IOException e) {
+            throw new ApiException(Response.Status.INTERNAL_SERVER_ERROR,
+                    "ERROR_LEER_ARCHIVO", "No se pudo leer el archivo de imagen");
+        }
+    }
+
+    /**
+     * Registro inmutable que encapsula el binario de una foto para servirlo.
+     */
+    public record FotoBinaria(
+            java.io.InputStream contenido,
+            String contentType,
+            long tamanoBytes,
+            String nombreArchivo) {}
+
     // ------------------------------------------------------------------
     // Helpers
     // ------------------------------------------------------------------
@@ -162,7 +205,7 @@ public class FotoRequerimientoService {
         FotoRequerimientoDto dto = new FotoRequerimientoDto();
         dto.setId(foto.getId());
         dto.setRequerimientoId(foto.getRequerimiento().getId());
-        dto.setRuta(foto.getRuta());
+        dto.setRuta("/api/v1/requerimientos/" + foto.getRequerimiento().getId() + "/fotos/" + foto.getId() + "/imagen");
         dto.setNombreArchivo(foto.getNombreArchivo());
         dto.setTamanoBytes(foto.getTamanoBytes());
         dto.setContentType(foto.getContentType());

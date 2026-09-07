@@ -35,6 +35,7 @@ import {useAuth} from '../context/AuthContext';
 import type {RootStackParamList} from '../navigation/types';
 import {
   extractErrorMessage,
+  getFotoUrl,
   listarFotosRequerimiento,
   listarRequerimientos,
   type FotoRequerimientoDto,
@@ -68,12 +69,12 @@ function VerModal({
   req: RequerimientoDto | null;
   onClose: () => void;
 }) {
-  const [fotosModal, setFotosModal] = useState<FotoRequerimientoDto[]>([]);
+  const [fotosUrls, setFotosUrls] = useState<Array<{foto: FotoRequerimientoDto; url: string}>>([]);
   const [loadingFotos, setLoadingFotos] = useState(false);
 
   useEffect(() => {
     if (!req) {
-      setFotosModal([]);
+      setFotosUrls([]);
       return;
     }
     let activo = true;
@@ -81,9 +82,16 @@ function VerModal({
       setLoadingFotos(true);
       try {
         const fotos = await listarFotosRequerimiento(req.id);
-        if (activo) { setFotosModal(fotos); }
+        if (!activo) { return; }
+        const urls = await Promise.all(
+          fotos.map(async foto => ({
+            foto,
+            url: await getFotoUrl(req.id, foto.id),
+          })),
+        );
+        if (activo) { setFotosUrls(urls); }
       } catch {
-        if (activo) { setFotosModal([]); }
+        if (activo) { setFotosUrls([]); }
       } finally {
         if (activo) { setLoadingFotos(false); }
       }
@@ -130,13 +138,13 @@ function VerModal({
             ))}
             {loadingFotos ? (
               <LoadingState message="Cargando fotos…" />
-            ) : fotosModal.length > 0 ? (
+            ) : fotosUrls.length > 0 ? (
               <View style={styles.fotosSection}>
                 <Text style={styles.fotosSectionTitle}>Evidencia fotográfica</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  {fotosModal.map((foto, idx) => (
+                  {fotosUrls.map(({foto, url}, idx) => (
                     <View key={String(foto.id)} style={styles.fotoThumbnail}>
-                      <Image source={{uri: foto.ruta}} style={styles.fotoImagen} />
+                      <Image source={{uri: url}} style={styles.fotoImagen} />
                       <Text style={styles.fotoCaption}>Foto {idx + 1}</Text>
                     </View>
                   ))}

@@ -41,6 +41,7 @@ import {
   actualizarRequerimiento,
   eliminarFotoRequerimiento,
   extractErrorMessage,
+  getFotoUrl,
   listarFotosRequerimiento,
   obtenerRequerimiento,
   obtenerStockEspecie,
@@ -90,7 +91,7 @@ export default function EditarRequerimientoScreen() {
   const [horaLiberacion, setHoraLiberacion] = useState('');
   const [estado, setEstado] = useState<string>('REGISTRADO');
   const [stock, setStock] = useState<number | null>(null);
-  const [fotosExistentes, setFotosExistentes] = useState<FotoRequerimientoDto[]>([]);
+  const [fotosExistentes, setFotosExistentes] = useState<Array<{foto: FotoRequerimientoDto; url: string}>>([]);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -139,7 +140,14 @@ export default function EditarRequerimientoScreen() {
         // Cargar fotos desde servidor
         try {
           const fotosServer = await listarFotosRequerimiento(id);
-          if (activo) { setFotosExistentes(fotosServer); }
+          if (!activo) { return; }
+          const fotosConUrl = await Promise.all(
+            fotosServer.map(async f => ({
+              foto: f,
+              url: await getFotoUrl(id, f.id),
+            })),
+          );
+          setFotosExistentes(fotosConUrl);
         } catch {
           if (activo) { setFotosExistentes([]); }
         }
@@ -165,7 +173,7 @@ export default function EditarRequerimientoScreen() {
       } catch {
         // Silenciar — el usuario puede reintentar
       }
-      setFotosExistentes(prev => prev.filter(f => f.id !== fotoId));
+      setFotosExistentes(prev => prev.filter(item => item.foto.id !== fotoId));
     } catch {
       // Silenciar — el usuario puede reintentar
     }
@@ -359,10 +367,10 @@ export default function EditarRequerimientoScreen() {
                 <Text style={styles.fotoTitulo}>Foto de liberación</Text>
                 {fotosExistentes.length > 0 && (
                   <View style={styles.fotoPreviews}>
-                    {fotosExistentes.map((foto, idx) => (
+                    {fotosExistentes.map(({foto, url}, idx) => (
                       <View key={String(foto.id)} style={styles.fotoPreview}>
                         <Image
-                          source={{uri: foto.ruta}}
+                          source={{uri: url}}
                           style={styles.fotoImagen}
                         />
                         <Text style={styles.fotoPreviewText}>Servidor {idx + 1}</Text>

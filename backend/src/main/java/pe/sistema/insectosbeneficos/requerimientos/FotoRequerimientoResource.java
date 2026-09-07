@@ -9,6 +9,7 @@ import org.jboss.resteasy.reactive.RestForm;
 import org.jboss.resteasy.reactive.multipart.FileUpload;
 import pe.sistema.insectosbeneficos.requerimientos.dto.FotoRequerimientoDto;
 
+import java.io.InputStream;
 import java.util.List;
 
 /**
@@ -63,6 +64,28 @@ public class FotoRequerimientoResource {
     public List<FotoRequerimientoDto> listarFotos(
             @PathParam("requerimientoId") Long requerimientoId) {
         return fotoService.listarFotos(requerimientoId);
+    }
+
+    /**
+     * Descarga la imagen binaria de una foto (HITO-010 gap).
+     * Retorna el contenido con el Content-Type correcto (image/jpeg o image/png).
+     */
+    @GET
+    @Path("/{fotoId}/imagen")
+    @Produces({"image/jpeg", "image/png"})
+    public Response descargarImagen(
+            @PathParam("requerimientoId") Long requerimientoId,
+            @PathParam("fotoId") Long fotoId) {
+
+        FotoRequerimientoService.FotoBinaria binaria =
+                fotoService.getFotoStream(requerimientoId, fotoId);
+
+        return Response.ok(binaria.contenido(), binaria.contentType())
+                .header("Content-Length", binaria.tamanoBytes())
+                .header("Content-Disposition",
+                        "inline; filename=\"" + binaria.nombreArchivo() + "\"")
+                .header("Cache-Control", "public, max-age=86400")
+                .build();
     }
 
     /**

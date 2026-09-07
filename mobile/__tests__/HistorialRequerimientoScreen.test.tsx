@@ -16,6 +16,16 @@ import {useNavigation} from '@react-navigation/native';
 import HistorialRequerimientoScreen from '../src/screens/HistorialRequerimientoScreen';
 import {AuthProvider} from '../src/context/AuthContext';
 import {clearToken} from '../src/services/ApiClient';
+
+jest.mock('../src/services/ApiClient', () => {
+  const actual = jest.requireActual('../src/services/ApiClient');
+  return {
+    ...actual,
+    getFotoUrl: jest.fn(async (reqId: number, fotoId: number) =>
+      `http://localhost:6101/api/v1/requerimientos/${reqId}/fotos/${fotoId}/imagen`,
+    ),
+  };
+});
 import {
   findByLabel,
   flushPromises,
@@ -152,11 +162,11 @@ describe('HistorialRequerimientoScreen — fotos en detalle (HITO-011)', () => {
 
     // Verificar que aparecen las fotos (thumbnails con uri correcta)
     const fotoImages = tree.root.findAll(
-      (node: any) => node.props.source && node.props.source.uri === '/fotos/foto1.jpg',
+      (node: any) => node.props.source && node.props.source.uri === 'http://localhost:6101/api/v1/requerimientos/1/fotos/10/imagen',
     );
     expect(fotoImages.length).toBeGreaterThanOrEqual(1);
     const foto2Images = tree.root.findAll(
-      (node: any) => node.props.source && node.props.source.uri === '/fotos/foto2.jpg',
+      (node: any) => node.props.source && node.props.source.uri === 'http://localhost:6101/api/v1/requerimientos/1/fotos/11/imagen',
     );
     expect(foto2Images.length).toBeGreaterThanOrEqual(1);
   });

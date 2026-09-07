@@ -841,6 +841,19 @@ export async function eliminarFotoRequerimiento(
   await api.delete(`/requerimientos/${requerimientoId}/fotos/${fotoId}`);
 }
 
+/**
+ * Construye la URL HTTP completa para descargar la imagen de una foto.
+ * Reemplaza `foto.ruta` (path de disco del servidor) con una URL que
+ * <Image> de React Native puede resolver vía GET /imagen.
+ */
+export async function getFotoUrl(
+  requerimientoId: number,
+  fotoId: number,
+): Promise<string> {
+  const baseUrl = await loadApiUrl();
+  return `${baseUrl}/requerimientos/${requerimientoId}/fotos/${fotoId}/imagen`;
+}
+
 /* ------------------------------------------------------------------ */
 /* Cumplimiento de producción (HITO-014)                                */
 /* ------------------------------------------------------------------ */

@@ -353,4 +353,48 @@ public class FotoRequerimientoResourceTest {
              .statusCode(404)
              .body("codigo", is("REQUERIMIENTO_NO_ENCONTRADO"));
     }
+
+    // ------------------------------------------------------------------
+    // 12. Descargar imagen -> 200 con image/jpeg
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testDescargarImagen() {
+        asegurarStockEspecie();
+        long reqId = crearRequerimientoId(new BigDecimal("10"));
+        byte[] fotoBytes = generarFotoJpeg(512);
+
+        // Subir foto primero
+        long fotoId = given()
+          .auth().oauth2(TestSupport.seedToken())
+          .multiPart("archivo", "foto-descargar.jpg", fotoBytes, "image/jpeg")
+          .formParam("metadatos", "Para descargar")
+          .when().post("/api/v1/requerimientos/" + reqId + "/fotos")
+          .then().statusCode(201)
+          .extract().jsonPath().getLong("id");
+
+        // Descargar imagen
+        given()
+          .auth().oauth2(TestSupport.seedToken())
+          .when().get("/api/v1/requerimientos/" + reqId + "/fotos/" + fotoId + "/imagen")
+          .then()
+             .statusCode(200)
+             .contentType("image/jpeg");
+    }
+
+    // ------------------------------------------------------------------
+    // 13. Descargar imagen de foto inexistente -> 404
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testDescargarImagenInexistente() {
+        asegurarStockEspecie();
+        long reqId = crearRequerimientoId(new BigDecimal("10"));
+
+        given()
+          .auth().oauth2(TestSupport.seedToken())
+          .when().get("/api/v1/requerimientos/" + reqId + "/fotos/999999/imagen")
+          .then()
+             .statusCode(404);
+    }
 }
