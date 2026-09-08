@@ -83,15 +83,15 @@ describe('normalizeApiUrl', () => {
     expect(normalizeApiUrl('localhost')).toBe('http://localhost:6101/api/v1');
   });
 
-  test('URL completa con puerto y base path → NO se modifica', () => {
+  test('URL con puerto diferente → puerto reemplazado a 6101', () => {
     expect(normalizeApiUrl('http://miservidor:8080/api/v1')).toBe(
-      'http://miservidor:8080/api/v1',
+      'http://miservidor:6101/api/v1',
     );
   });
 
-  test('URL con puerto pero sin base path → solo añade /api/v1', () => {
+  test('URL con puerto pero sin base path → reemplaza puerto y añade /api/v1', () => {
     expect(normalizeApiUrl('http://miservidor:8080')).toBe(
-      'http://miservidor:8080/api/v1',
+      'http://miservidor:6101/api/v1',
     );
   });
 

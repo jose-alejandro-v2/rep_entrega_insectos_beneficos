@@ -22,17 +22,17 @@ export const API_URL_KEY = 'apiUrl';
 
 /**
  * Normaliza la URL del backend: acepta IP simple, host o URL completa y
- * completa el resto con puerto 6101 y base path `/api/v1`.
+ * SIEMPRE usa puerto 6101 y base path `/api/v1`.
  *
  * Reglas (en orden): trim + quita barras finales; sin esquema → antepone
- * `http://` (soporte https conservado para producción futura); sin puerto
- * explícito en host[:puerto] → añade `:6101`; sin `/api/v1` → lo añade al
+ * `http://` (soporte https conservado para producción futura); cualquier
+ * puerto explícito en host[:puerto] → se reemplaza por `:6101`; sin `/api/v1` → lo añade al
  * final. Idempotente: URLs ya completas (`http://host:6101/api/v1`) no se
  * modifican (p. ej. las ya guardadas en el Keychain). Ejemplos:
  *   '10.13.18.93'                    → 'http://10.13.18.93:6101/api/v1'
  *   'localhost'                      → 'http://localhost:6101/api/v1'
- *   'http://miservidor:8080'         → 'http://miservidor:8080/api/v1'
- *   'http://miservidor:8080/api/v1'  → sin cambios
+ *   'http://miservidor:8080'         → 'http://miservidor:6101/api/v1'
+ *   'http://miservidor:6101/api/v1'  → sin cambios
  */
 export function normalizeApiUrl(url: string): string {
   let out = String(url || '').trim().replace(/\/+$/, '');
@@ -50,9 +50,9 @@ export function normalizeApiUrl(url: string): string {
   const slashIndex = afterScheme.indexOf('/');
   const hostPort = slashIndex === -1 ? afterScheme : afterScheme.slice(0, slashIndex);
   const rest = slashIndex === -1 ? '' : afterScheme.slice(slashIndex);
-  if (hostPort && hostPort.indexOf(':') === -1) {
-    out = `${scheme}${hostPort}:6101${rest}`;
-  }
+  // Siempre forzar puerto 6101, sin importar lo que digite el usuario.
+  const hostSinPuerto = hostPort.includes(':') ? hostPort.slice(0, hostPort.indexOf(':')) : hostPort;
+  out = `${scheme}${hostSinPuerto}:6101${rest}`;
   if (!/\/api\/v1(\/|$)/.test(out)) {
     out = `${out.replace(/\/+$/, '')}/api/v1`;
   }
