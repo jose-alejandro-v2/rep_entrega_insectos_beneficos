@@ -2435,3 +2435,49 @@ mobile (ApiClient + 7 screens + 3 repos offline + SyncManager extendido) y docum
 | `npx tsc --noEmit` (mobile) | PASS — 0 errores |
 | `npm test -- --forceExit --runInBand` (mobile) | PASS — 150 tests, 26 suites, 0 failures |
 | `mvnw test` (backend, solo HITO-015) | PASS — 12 tests, 0 failures |
+
+---
+
+# 62. Integración Archify - Herramienta de Diagramas (v1.9.0)
+
+## 62.1 Resumen
+
+Se integró **Archify** como Agent Skill para OpenCode, permitiendo la generación de diagramas
+de arquitectura, workflow, sequence, dataflow y lifecycle como HTML interactivo autocontenido.
+
+## 62.2 Decisiones
+
+| Decisión | Justificación |
+|---|---|
+| Instalación global (`~/.agents/skills/archify/`) | Disponible en todos los proyectos del orchestrator |
+| Permisos solo para orchestrator | Control centralizado de generación de diagramas |
+| Puerto 6101 confirmado | Backend Quarkus en :6101, mobile config.ts y ApiClient.ts ya lo definen |
+
+## 62.3 Archivos
+
+### Archivos modificados
+- `mobile/versionHistory.js`: entrada 1.9.0
+- `AGENTS.md`: §2.1 "Herramientas de documentación" con Archify
+- `README.md`: sección "Herramientas de documentación"
+- `.opencode/agents/orchestrator.md`: instrucciones de uso de Archify
+- `.opencode/opencode.json`: permisos `permission.skill.archify: "allow"`
+
+### Archivos generados
+- `docs_implementacion/_diagramas/arquitectura_completa.architecture.json` — Fuente tipada
+- `docs_implementacion/_diagramas/arquitectura_completa.architecture.html` — HTML interactivo (801 KB)
+
+## 62.4 URLs y Puertos Definidos
+
+| Servicio | URL | Fuente |
+|---|---|---|
+| Backend Quarkus | `:6101` | `application.properties:8` |
+| Mobile fallback | `http://localhost:6101/api/v1` | `config.ts:20` |
+| Mobile normalización | Fuerza `:6101` siempre | `ApiClient.ts:53-55` |
+| PostgreSQL | `:5432` | `application.properties:13` |
+
+## 62.5 Verificación
+
+| Comando | Resultado |
+|---|---|
+| `node ~/.agents/skills/archify/bin/archify.mjs doctor` | PASS — todos los checks OK |
+| `node ~/.agents/skills/archify/bin/archify.mjs deliver ...` | PASS — 9/9 checks, 0 errors, 0 warnings |

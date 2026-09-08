@@ -20,6 +20,16 @@ Decisiones de arquitectura vigentes y decisiones descartadas: ver
 [`docs_implementacion/_auditoria/ADRs_AUDITORIA/`](docs_implementacion/_auditoria/ADRs_AUDITORIA/)
 (`ADR-A001.md`, `ADR-A002.md`, `ADR-A003.md`).
 
+## Herramientas de documentación
+
+| Herramienta | Uso |
+|---|---|
+| **Archify** | Generación de diagramas de arquitectura, workflow, sequence, dataflow y lifecycle como HTML interactivo autocontenido |
+| **PUML** | Diagramas estáticos UML en `docs_implementacion/_diagramas/` |
+
+Archify está instalado como Agent Skill para OpenCode. Los diagramas generados se guardan en
+`docs_implementacion/_diagramas/` y son autocontenidos (HTML interactivo con temas oscuro/claro).
+
 ## Estructura del repositorio
 
 ```text

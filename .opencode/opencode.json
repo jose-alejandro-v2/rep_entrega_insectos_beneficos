@@ -17,6 +17,11 @@
       ]
     }
   },
+  "permission": {
+    "skill": {
+      "archify": "allow"
+    }
+  },
   "agent": {
     "orchestrator": {
       "mode": "primary",

@@ -44,6 +44,23 @@ convenciones de documentación y coordinación de agentes.
 | Infra | Docker / Docker Compose, Nginx, GitHub Actions, VPS Linux |
 | Almacenamiento evidencias | Filesystem server + metadatos inmutables (sin Firebase) |
 
+## 2.1 Herramientas de documentación
+
+| Herramienta | Uso |
+|---|---|
+| **Archify** | Generación de diagramas de arquitectura, workflow, sequence, dataflow y lifecycle como HTML interactivo autocontenido |
+
+Archify está instalado globalmente como Agent Skill (`~/.agents/skills/archify/`).
+Solo el agente **orchestrator** tiene permisos para usar la skill `archify` (configurado en `opencode.json`).
+
+Comandos útiles desde el orchestrator:
+```bash
+node ~/.agents/skills/archify/bin/archify.mjs doctor          # Verificar instalación
+node ~/.agents/skills/archify/bin/archify.mjs guide "scenario" # Guión de diagrama
+```
+
+Los diagramas generados se guardan en `docs_implementacion/_diagramas/`.
+
 ## 3. Estructura del repositorio
 
 ```text

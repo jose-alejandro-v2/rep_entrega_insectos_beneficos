@@ -6,6 +6,16 @@
 
 const versionHistory = [
   {
+    version: '1.9.0',
+    fecha: '2026-09-08',
+    cambios: [
+      'Herramienta de diagramas Archify: generación de diagramas de arquitectura, workflow, sequence, dataflow y lifecycle como HTML interactivo autocontenido.',
+      'Instalación global de Archify como Agent Skill para OpenCode.',
+      'Diagrama de arquitectura del sistema generado en docs_implementacion/_diagramas/.',
+      'Documentación actualizada: AGENTS.md, README.md, orchestrator.md con uso de Archify.',
+    ],
+  },
+  {
     version: '1.8.0',
     fecha: '2026-09-03',
     cambios: [

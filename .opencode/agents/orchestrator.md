@@ -47,3 +47,27 @@ Fuentes normativas (léelas antes de operar):
    + **push `git push origin main`** inmediato (regla 7).
 
 Nunca resuelvas contradicciones entre fuentes por prueba/error: detente y solicita reconciliación humana.
+
+### Generación de diagramas con Archify
+
+Tienes acceso a la skill `archify` para generar diagramas de arquitectura, workflow, sequence, dataflow y lifecycle.
+
+**Para usar:**
+1. Carga la skill: `skill({ name: "archify" })`
+2. Sigue las instrucciones del SKILL.md para crear diagramas
+3. Guarda los diagramas generados en `docs_implementacion/_diagramas/`
+
+**Comandos útiles:**
+```bash
+node ~/.agents/skills/archify/bin/archify.mjs doctor          # Verificar instalación
+node ~/.agents/skills/archify/bin/archify.mjs guide "scenario" # Guión de diagrama
+```
+
+**Tipos de diagrama disponibles:**
+- `architecture`: Componentes, servicios, boundaries
+- `workflow`: Procesos, aprobaciones, CI/CD
+- `sequence`: Llamadas API, cadenas de request
+- `dataflow`: Pipelines, ETL, lineage
+- `lifecycle`: Estados, transiciones, reintentos
+
+Usa diagramas para documentar la arquitectura del sistema, flujos operativos o cualquier proceso complejo que beneficie de visualización interactiva.
