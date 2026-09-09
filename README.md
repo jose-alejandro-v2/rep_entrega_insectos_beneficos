@@ -42,7 +42,7 @@ backend/      API Quarkus v2 — auth/usuarios bajo /api/v1, login 3 pasos, role
 mobile/       App React Native CLI 0.86 / React 19.2.3 — auth v2 (login 3 pasos, URL runtime,
               SecureStore/keychain), módulos Programación (Lunes/Jueves reales + Restante, pull-to-refresh,
               cumplimiento de producción), Requerimientos, Catálogos, fotos de requerimiento
-              + hook usePhotoCapture, modo offline (SQLite + outbox + sync) — versión 1.8.0
+              + hook usePhotoCapture — versión 1.9.0 (online-only, offline descartado)
 web/          Frontend React + Vite (pendiente de scaffold)
 docs_implementacion/
 ├── _sdd/                      Especificación, plan, tareas e implementación
@@ -105,14 +105,16 @@ docs_implementacion/
 - **Fix V14 (2026-09-03)**: la migración V14 referenciaba tabla `programacion_detalles`
   (inexistente) en vez de `detalle_programaciones` (V4). Flyway abortaba → backend 500 en todos
   los endpoints. Corregido y push `763cd30`.
-- **HITO-015 cerrado (2026-09-03) = Flujo Despachos → Recepción → Liberación**: ciclo completo
+- **HITO-015 cerrado (2026-09-03) = Flujo Despachos → Recepción → Liberación** *(DESCARTADO — depende de offline)*: ciclo completo
   de estados APROBADO → ENTREGADO → RECIBIDO → LIBERADO con tablas separadas. Backend: migraciones
   V15-V17 (despachos, recepciones, liberaciones), services, resources, DTOs, 12 tests. Mobile:
-  ApiClient + 7 screens (DetalleRequerimiento con acciones contextuales), 3 repos offline,
-  SyncManager extendido, offline completo para perfil Usuario. Versión **1.8.0**, versionCode 11
-  (150 tests MO / 26 suites · 12 tests BE).
-- **Pendientes**: endpoint backend para servir fotos estáticas (requerido para visualización real en `<Image>`),
-  validación end-to-end desde mobile contra el backend real, actas PDF, frontend web (React/Vite) y CI/CD
+  ApiClient + 7 screens (DetalleRequerimiento con acciones contextuales). Versión **1.8.0**, versionCode 11
+  (12 tests BE).
+- **v1.9.0 (2026-09-08) = Sincronización + Tests flujo crítico**: versiones sincronizadas (package.json,
+  build.gradle versionCode 12, appVersion.ts), tests e2e de flujo login (13), requerimiento (11) y
+  ciclo-entrega (13). Suite total: **127 tests / 22 suites**. Documentación: descarte offline (§63),
+  endpoint fotos verificado, keystore verificado.
+- **Pendientes**: SSL Pinning para producción (HTTPS en VPS), frontend web (React/Vite) y CI/CD
   (GitHub Actions). Ver [`docs_implementacion/_sdd/`](docs_implementacion/_sdd/).
 
 ## Base de datos local (desarrollo)

@@ -2501,3 +2501,52 @@ complejidad operativa, elimina dependencias nativas innecesarias y facilita el m
 - HITO-013, HITO-014 y HITO-015 marcados como DESCARTADOS en AGENTS.md
 
 **Estado**: Decisión tomada por el usuario/orchestrator. Documentada en 2026-09-08.
+
+---
+
+## 64. Sincronización de Versiones + Tests Flujo Crítico (2026-09-08)
+
+**Objetivo**: Sincronizar versiones del mobile a 1.9.0 y agregar tests de flujo completo (e2e)
+para los 3 flujos críticos del sistema.
+
+### 64.1 Cambios Realizados
+
+| Archivo | Cambio |
+|---|---|
+| `mobile/package.json` | `version: "1.8.0"` → `"1.9.0"` |
+| `mobile/android/app/build.gradle` | `versionCode 11` → `12`, `versionName "1.8.0"` → `"1.9.0"` |
+| `mobile/src/constants/appVersion.ts` | `APP_VERSION = '1.8.0'` → `'1.9.0'` |
+| `mobile/__tests__/PerfilScreen.test.tsx` | Test actualizado para versión 1.9.0 |
+| `AGENTS.md` | HITO-013/014/015 marcados como DESCARTADOS |
+| `docs_implementacion/_sdd/04_implementacion.md` | §63 (descarte offline) + §64 (este documento) |
+
+### 64.2 Tests de Flujo Crítico (Nuevos)
+
+| Archivo | Tests | Flujo |
+|---|---|---|
+| `mobile/__tests__/flows/login.e2e.test.tsx` | 13 | ServerCheck → URL → Login 3 pasos → Home |
+| `mobile/__tests__/flows/requerimiento.e2e.test.tsx` | 11 | Crear → Editar → Historial requerimiento |
+| `mobile/__tests__/flows/ciclo-entrega.e2e.test.tsx` | 13 | Despacho → Recepción → Liberación |
+
+**Suite total**: 127 tests / 22 suites / 0 failures
+
+### 64.3 Funcionalidades Pré-existentes Verificadas
+
+| Funcionalidad | Estado | Archivo |
+|---|---|---|
+| Endpoint fotos backend (`GET /{fotoId}/imagen`) | ✅ Implementado | `FotoRequerimientoResource.java:73-89` |
+| Mobile `getFotoUrl()` | ✅ Correcto | `ApiClient.ts:849-855` |
+| Keystore firma release | ✅ Configurado | `keystore.properties` + `insectos-beneficios-release.keystore` |
+| Network Security Config | ✅ Development mode | `network_security_config.xml` (HTTP cleartext para LAN) |
+
+### 64.4 Pendiente
+
+- **SSL Pinning (Fase 3.1)**: Pendiente para producción con HTTPS en VPS.
+
+### 64.5 Verificación
+
+| Comando | Resultado |
+|---|---|
+| `cd mobile && npm test -- --runInBand` | 127 tests / 22 suites / 0 failures |
+
+**Estado**: Implementado y verificado. Commit `7b81116`.
