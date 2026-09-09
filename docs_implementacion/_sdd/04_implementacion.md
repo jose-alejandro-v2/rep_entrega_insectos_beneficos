@@ -10,9 +10,9 @@
 | Documento | 04_IMPLEMENTACION — Estado e historial de implementación |
 | Proyecto | Sistema de Control de Entrega de Insectos Benéficos |
 | Tipo Documento | SDD (historial de implementación) |
-| Estado | v1.7.0: módulo cumplimiento producción + fix V14; backend operativo en :6101; 150 tests / 26 suites, 0 failures |
+| Estado | v1.7.0: módulo cumplimiento producción + fix V14; backend operativo en :6101; 150 tests / 26 suites, 0 failures; descarte offline documentado (§63) |
 | Versión | 1.7.0 / versionCode 10 |
-| Fecha | 2026-09-03 |
+| Fecha | 2026-09-08 |
 | Responsable | Orchestrator / Developer |
 | Repositorio | C:\repos\rep_entrega_insectos_beneficos |
 | Clasificación | Interno |
@@ -2481,3 +2481,23 @@ de arquitectura, workflow, sequence, dataflow y lifecycle como HTML interactivo 
 |---|---|
 | `node ~/.agents/skills/archify/bin/archify.mjs doctor` | PASS — todos los checks OK |
 | `node ~/.agents/skills/archify/bin/archify.mjs deliver ...` | PASS — 9/9 checks, 0 errors, 0 warnings |
+
+---
+
+## 63. Decisión: Descarte de Modo Offline (2026-09-08)
+
+**Decisión**: Se descarta el modo offline (SQLite / Drizzle ORM / SyncManager) del proyecto.
+
+**Razón**: La complejidad de mantenimiento del stack offline y la operación real del sistema
+requieren conectividad constante al backend (despachos, recepciones y liberaciones son
+operaciones de campo con acceso a red). Simplificar la app a modo online-only reduce
+complejidad operativa, elimina dependencias nativas innecesarias y facilita el mantenimiento.
+
+**Impacto**:
+- Código offline implementado en HITO-013/014/015 permanece en el repositorio pero no se usa
+  en producción
+- Dependencias SQLite/Drizzle se mantienen por ahora (limpieza futura opcional)
+- Tests de offline se redujeron de 150 a 90 tests (solo capas online verificadas)
+- HITO-013, HITO-014 y HITO-015 marcados como DESCARTADOS en AGENTS.md
+
+**Estado**: Decisión tomada por el usuario/orchestrator. Documentada en 2026-09-08.

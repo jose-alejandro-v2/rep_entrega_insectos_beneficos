@@ -86,7 +86,7 @@ describe('PerfilScreen (estructura UX Apilamiento → Vanguard)', () => {
 
     // Sección "Aplicación": versión + acceso al historial.
     expect(contarTexto(tree, 'Aplicación')).toBe(1);
-    expect(contarTexto(tree, 'Versión 1.8.0')).toBe(1);
+    expect(contarTexto(tree, 'Versión 1.9.0')).toBe(1);
     expect(findByLabel(tree, 'Abrir historial de versiones')).toBeTruthy();
   });
 

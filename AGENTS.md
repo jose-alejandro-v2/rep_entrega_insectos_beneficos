@@ -182,22 +182,23 @@ y reportar al Orchestrator; no "arreglarlo" en silencio.
   valor es 0, fondo suave alternado por semana, y **pull-to-refresh** en el listado. Migración V12
   (`UNIQUE(programacion_id, fecha)`, sin columna `dia`). El botón "Enviar stock" mantiene su
   comportamiento (publica + bloquea). 90 tests MO / 18 suites (versión 1.6.0 / versionCode 7).
-- **HITO-013 (cerrado, 2026-08-30) = Modo Offline Completo**: persistencia SQLite con Drizzle ORM,
-  repositories CRUD offline (requerimientos + fotos), motor de sincronización outbox→push→pull,
-  UI adaptativa (OfflineBanner, SyncIndicator, SyncToast), hooks (useOnlineStatus, useLiveQuery).
-  Suite completa: **150 tests / 26 suites, 0 failures**. Corrección de bug de producción en
-  `token.ts` base64UrlDecode (padding bug). Versión **1.6.1** / versionCode 8.
-- **HITO-014 (cerrado, 2026-09-02) = Módulo de Cumplimiento de Producción**: registro real vs
-  programado por semana de programación (papel/sobre). Botón lápiz/lupa en tabla de edición,
-  modal de registro y consulta con porcentaje de cumplimiento. Backend: migración V14
+- **HITO-013 (cerrado, 2026-08-30) = Modo Offline Completo** *(DESCARTADO — código implementado pero no se usa en producción)*:
+  persistencia SQLite con Drizzle ORM, repositories CRUD offline (requerimientos + fotos), motor
+  de sincronización outbox→push→pull, UI adaptativa (OfflineBanner, SyncIndicator, SyncToast),
+  hooks (useOnlineStatus, useLiveQuery). Suite completa: **150 tests / 26 suites, 0 failures**.
+  Corrección de bug de producción en `token.ts` base64UrlDecode (padding bug). Versión **1.6.1** /
+  versionCode 8. *(Decision descarte: §63 en 04_implementacion.md)*
+- **HITO-014 (cerrado, 2026-09-02) = Módulo de Cumplimiento de Producción** *(DESCARTADO — depende de offline)*:
+  registro real vs programado por semana de programación (papel/sobre). Botón lápiz/lupa en tabla
+  de edición, modal de registro y consulta con porcentaje de cumplimiento. Backend: migración V14
   (`cumplimiento_programacion`), entity, repository, DTO, resource con upsert. Offline:
   repository SQLite. Versión **1.7.0** / versionCode 10 (150 tests / 26 suites).
-- **HITO-015 (cerrado, 2026-09-03) = Flujo Despachos → Recepción → Liberación**: ciclo completo
-  de estados APROBADO → ENTREGADO → RECIBIDO → LIBERADO con tablas separadas. Backend: migraciones
-  V15-V17 (despachos, recepciones, liberaciones), services, resources, DTOs, 12 tests. Mobile:
-  ApiClient + 7 screens (DetalleRequerimiento con acciones contextuales), 3 repos offline,
-  SyncManager extendido, offline completo para perfil Usuario. Versión **1.8.0**, versionCode 11
-  (150 tests MO / 26 suites · 12 tests BE).
+- **HITO-015 (cerrado, 2026-09-03) = Flujo Despachos → Recepción → Liberación** *(DESCARTADO — depende de offline)*:
+  ciclo completo de estados APROBADO → ENTREGADO → RECIBIDO → LIBERADO con tablas separadas.
+  Backend: migraciones V15-V17 (despachos, recepciones, liberaciones), services, resources, DTOs,
+  12 tests. Mobile: ApiClient + 7 screens (DetalleRequerimiento con acciones contextuales), 3 repos
+  offline, SyncManager extendido, offline completo para perfil Usuario. Versión **1.8.0**,
+  versionCode 11 (150 tests MO / 26 suites · 12 tests BE).
 - Web (React/Vite) y CI/CD siguen pendientes (próxima fase).
 - **Endpoint backend para servir fotos estáticas** sigue pendiente (requerido para que `<Image>` muestre
   fotos reales; gap documentado en HITO-010 §40.8 / HITO-011 §41.8).
