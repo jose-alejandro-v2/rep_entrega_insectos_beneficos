@@ -66,7 +66,10 @@ Los diagramas generados se guardan en `docs_implementacion/_diagramas/`.
 ```text
 AGENTS.md
 README.md
-backend/                     (API Quarkus v2 — auth/usuarios bajo /api/v1, Flyway V1-V3, 32 tests)
+docker-compose.yml              (proyecto `repo_registro_insectos_beneficos`: postgres:16 + backend + nginx)
+nginx/nginx.conf                (proxy 8080 → backend:6101)
+backend/                     (API Quarkus v2 — auth/usuarios bajo /api/v1, Flyway V1-V17, Dockerfile multi-stage,
+                              32 tests; imagen `repo_registro_insectos_beneficos-backend`, TZ America/Lima)
 mobile/                      (React Native CLI 0.86 / React 19.2.3 — auth v2: login 3 pasos,
                               ApiClient.ts + keychain, ServerCheck/Settings, 27 tests)
 web/                         (React + Vite — pendiente de scaffold)
@@ -95,6 +98,9 @@ tabla `roles` + `usuarios.rol_id` V3, Super Admin id=1 inmune, 32 tests con Test
 `mobile/` es la app RN CLI v2 (`src/services/ApiClient.ts` → `/api/v1`, token y URL en SecureStore
 vía keychain, ServerCheck/Settings de URL runtime, login 3 pasos, 27 tests).
 **HITO-001 = Infraestructura base** (cerrado) y **HITO-002 = Auth v2** (ver §7).
+El backend corre dockerizado (compose proyecto `repo_registro_insectos_beneficos`): postgres:16 +
+imagen `repo_registro_insectos_beneficos-backend` (puerto 6101) + nginx (proxy 8080 → 6101),
+zona horaria `America/Lima` en el contenedor (HITO-016).
 
 ## 4. No usar (prohibido por decisión vigente)
 
@@ -199,6 +205,14 @@ y reportar al Orchestrator; no "arreglarlo" en silencio.
   12 tests. Mobile: ApiClient + 7 screens (DetalleRequerimiento con acciones contextuales), 3 repos
   offline, SyncManager extendido, offline completo para perfil Usuario. Versión **1.8.0**,
   versionCode 11 (150 tests MO / 26 suites · 12 tests BE).
+- **HITO-016 (cerrado, 2026-09-09) = Docker del sistema + creación de programación todos los días + TZ fix**:
+  `docker-compose.yml` (proyecto `repo_registro_insectos_beneficos`) con postgres + backend +
+  nginx; backend quarks corre en contenedor desde BD limpia (Flyway V1-V17). **Creación** de
+  programación disponible cualquier día (el PUT inicial del flujo crear envía `esCreacionInicial:true`
+  y omite la restricción L/J; la **edición** sigue restringida a Lunes/Jueves). UX: al entrar a
+  "Nuevo" la tabla del mes se muestra inmediatamente habilitada (sin esperar a seleccionar especie;
+  la especie solo habilita "Enviar stock" y ya no regenera la tabla). Zona horaria del contenedor
+  `America/Lima` (ENV TZ + `-Duser.timezone`). Versión **1.10.0** / versionCode 13.
 - Web (React/Vite) y CI/CD siguen pendientes (próxima fase).
 - **Endpoint backend para servir fotos estáticas** sigue pendiente (requerido para que `<Image>` muestre
   fotos reales; gap documentado en HITO-010 §40.8 / HITO-011 §41.8).

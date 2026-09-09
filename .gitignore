@@ -37,3 +37,6 @@ mobile/.env.local
 # Keystore de firma de produccion (NUNCA subir a git) - H9
 mobile/android/keystore.properties
 mobile/android/app/insectos-beneficios-release.keystore
+
+# Uploads runtime (volumen Docker, no versionar)
+backend/uploads/

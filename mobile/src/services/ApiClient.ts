@@ -512,6 +512,8 @@ export interface ProgramacionDto {
 /** Cuerpo de PUT /api/v1/programaciones/{id} (persistir valores editados). */
 export interface ActualizarProgramacionRequest {
   stockInicialBase: number;
+  /** true en el volcado inicial del flujo crear (POST → PUT): omite la restricción L/J en backend. */
+  esCreacionInicial?: boolean;
   detalles: Array<{
     id?: number;
     semana: number;

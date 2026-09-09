@@ -30,8 +30,11 @@ public class ProgramacionResourceTest {
 
     @Test
     public void testListProgramacionesReturnsMobileContractFields() {
-        final Integer anio = 2098;
-        final Integer mes = 5;
+        // anio/mes UNICOS (2095/2): evita colision con
+        // testCrearProgramacion_duplicadoMesAnioEspecie (2098/5) al compartir la
+        // misma BD Testcontainers dentro de la clase (independiente del orden).
+        final Integer anio = 2095;
+        final Integer mes = 2;
         // Crear una programacion primero (POST ya no autogenera en el GET).
         given()
           .auth().oauth2(TestSupport.seedToken())
@@ -117,5 +120,31 @@ public class ProgramacionResourceTest {
           .body(Map.of())
           .when().post("/api/v1/programaciones")
           .then().statusCode(400);
+    }
+
+    @Test
+    public void testPutConEsCreacionInicial_permiteVolcadoInicialCualquierDia() {
+        // HITO-016: el flujo crear del mobile hace POST → PUT (volcado inicial).
+        // Ese PUT NO debe caer en la restriccion L/J (solo aplica a la edicion).
+        // Deterministico: independiente del dia en que corra el test.
+        final Integer anio = 2096;
+        final Integer mes = 3;
+        Integer id = given()
+          .auth().oauth2(TestSupport.seedToken())
+          .contentType(ContentType.JSON)
+          .body(Map.of("anio", anio, "mes", mes, "especieId", 1))
+          .when().post("/api/v1/programaciones")
+          .then().statusCode(201)
+          .extract().path("id");
+
+        given()
+          .auth().oauth2(TestSupport.seedToken())
+          .contentType(ContentType.JSON)
+          .body(Map.of(
+              "stockInicialBase", 5000,
+              "esCreacionInicial", true,
+              "detalles", List.of()))
+          .when().put("/api/v1/programaciones/" + id)
+          .then().statusCode(200);
     }
 }

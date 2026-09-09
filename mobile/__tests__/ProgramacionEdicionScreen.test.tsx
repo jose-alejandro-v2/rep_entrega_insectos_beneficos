@@ -390,6 +390,10 @@ describe('ProgramacionEdicionScreen — edición (Admin)', () => {
       await flushPromises();
     });
 
+    // HITO-016: la tabla del mes se muestra al montar, sin seleccionar especie.
+    expect(findByLabel(tree, 'Papel Lun 03')).toBeTruthy();
+    expect(findByLabel(tree, 'Sobre Jue 06')).toBeTruthy();
+
     // Modo crear: no debe existir programación del periodo+especie (lista vacía).
     api.get.mockImplementation((url: string) => {
       if (url === '/especies') {
@@ -440,10 +444,13 @@ describe('ProgramacionEdicionScreen — edición (Admin)', () => {
       mes: 8,
       especieId: 1,
     });
-    // 2. PUT actualizar detalles (las filas vacías generadas)
+    // 2. PUT actualizar detalles (las filas vacías generadas) + esCreacionInicial
     expect(api.put).toHaveBeenCalledWith(
       '/programaciones/9',
-      expect.objectContaining({stockInicialBase: 5000}),
+      expect.objectContaining({
+        stockInicialBase: 5000,
+        esCreacionInicial: true,
+      }),
     );
     // 3. POST publicar
     expect(api.post).toHaveBeenCalledWith('/programaciones/9/publicar');
@@ -452,5 +459,112 @@ describe('ProgramacionEdicionScreen — edición (Admin)', () => {
       await new Promise(resolve => setTimeout(() => resolve(undefined), 2000));
     });
     expect(mockGoBackCrear).toHaveBeenCalled();
+  }, 10000);
+
+  test('modo crear: la tabla aparece al montar y el botón requiere especie seleccionada', async () => {
+    (useRoute as unknown as jest.Mock).mockReturnValue({
+      params: {anio: 2026, mes: 8, modo: 'crear'},
+    });
+    api.get.mockImplementation((url: string) => {
+      if (url === '/especies') {
+        return Promise.resolve({data: ESPECIES});
+      }
+      return Promise.resolve({data: []});
+    });
+
+    const tree = await renderEdicion();
+    await act(async () => {
+      await flushPromises();
+    });
+
+    // Tabla visible al montar, sin seleccionar especie aún.
+    expect(findByLabel(tree, 'Papel Lun 03')).toBeTruthy();
+    expect(findByLabel(tree, 'Sobre Lun 31')).toBeTruthy();
+    // Inputs habilitados para digitar de inmediato.
+    expect(findByLabel(tree, 'Papel Lun 03').props.editable).toBe(true);
+    // Sin especie seleccionada → "Enviar stock" deshabilitado.
+    expect(findByLabel(tree, 'Enviar stock').props.disabled).toBe(true);
+    // No se cargó ningún detalle de programación existente.
+    expect(api.get).not.toHaveBeenCalledWith('/programaciones/7');
+  });
+
+  test('modo crear: disponible en día no editable (sin avisos L/J, botón activo con especie)', async () => {
+    (esDiaEditable as unknown as jest.Mock).mockReturnValue(false);
+    (useRoute as unknown as jest.Mock).mockReturnValue({
+      params: {anio: 2026, mes: 8, modo: 'crear'},
+    });
+    api.get.mockImplementation((url: string) => {
+      if (url === '/especies') {
+        return Promise.resolve({data: ESPECIES});
+      }
+      return Promise.resolve({data: []});
+    });
+    api.post.mockResolvedValue({
+      data: {
+        id: 10,
+        anio: 2026,
+        mes: 8,
+        especieId: 2,
+        estado: 'EN_PROCESO',
+        stockInicialBase: 5000,
+        totalMes: 0,
+        detalles: [],
+      },
+    });
+    api.put.mockResolvedValue({data: {}});
+
+    const tree = await renderEdicion();
+    await act(async () => {
+      await flushPromises();
+    });
+
+    // Sin avisos de restricción L/J en modo crear.
+    expect(
+      contarTexto(
+        tree,
+        'La edición solo está permitida los lunes y jueves de 00:00 a 23:59.',
+      ),
+    ).toBe(0);
+    expect(
+      contarTexto(
+        tree,
+        'La creación solo está permitida los lunes y jueves de 00:00 a 23:59.',
+      ),
+    ).toBe(0);
+
+    // Seleccionar especie → botón habilitado e inputs editables.
+    await act(async () => {
+      findByLabel(tree, 'Especie Cryptolaemus').props.onPress();
+    });
+    await act(async () => {
+      await flushPromises();
+    });
+    expect(findByLabel(tree, 'Enviar stock').props.disabled).toBe(false);
+    expect(findByLabel(tree, 'Papel Lun 03').props.editable).toBe(true);
+
+    await act(async () => {
+      findByLabel(tree, 'Enviar stock').props.onPress();
+    });
+    await act(async () => {
+      await flushPromises();
+    });
+    await act(async () => {
+      await flushPromises();
+    });
+
+    expect(api.post).toHaveBeenCalledWith('/programaciones', {
+      anio: 2026,
+      mes: 8,
+      especieId: 2,
+    });
+    expect(api.put).toHaveBeenCalledWith(
+      '/programaciones/10',
+      expect.objectContaining({esCreacionInicial: true}),
+    );
+
+    // Drenar el setTimeout(1.5s) de navegación tras publicar.
+    await act(async () => {
+      await new Promise(resolve => setTimeout(() => resolve(undefined), 2000));
+    });
   }, 10000);
 });

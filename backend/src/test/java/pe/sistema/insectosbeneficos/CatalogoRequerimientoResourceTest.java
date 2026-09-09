@@ -31,8 +31,8 @@ public class CatalogoRequerimientoResourceTest {
           .then()
              .statusCode(200)
              .body("size()", is(7))
-             .body("find { it.nombre == 'FLORACIÓN Y CUAJA' }", notNullValue())
-             .body("find { it.nombre == 'CRECIMIENTO DE BAYAS' }", notNullValue())
+             .body("find { it.nombre == 'Floración y Cuaja' }", notNullValue())
+             .body("find { it.nombre == 'Crecimiento de Bayas' }", notNullValue())
              .body("find { it.estado == 'ACTIVO' }", notNullValue());
     }
 
@@ -43,7 +43,7 @@ public class CatalogoRequerimientoResourceTest {
           .then()
              .statusCode(200)
              .body("size()", is(5))
-             .body("find { it.nombre == 'LEPIDÓPTEROS LARVA' }", notNullValue())
+             .body("find { it.nombre == 'Lepidópteros Larva' }", notNullValue())
              .body("find { it.estado == 'ACTIVO' }", notNullValue());
     }
 

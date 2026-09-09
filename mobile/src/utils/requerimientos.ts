@@ -134,6 +134,8 @@ export function esRangoValido(desdeISO: string | null, hastaISO: string | null):
 
 export interface FilaProyeccion {
   semana: number;
+  /** Fecha ISO del primer día de la semana (Lunes o Jueves). */
+  fecha: string;
   papel: number;
   sobre: number;
   total: number;
@@ -144,12 +146,13 @@ export interface FilaProyeccion {
  * especies), calculando Total = papel + sobre (RN-019).
  */
 export function filasProyeccion(programaciones: ProgramacionDto[]): FilaProyeccion[] {
-  const mapa = new Map<number, {papel: number; sobre: number}>();
+  const mapa = new Map<number, {papel: number; sobre: number; fecha: string}>();
   for (const p of programaciones) {
     for (const d of p.detalles ?? []) {
-      const cur = mapa.get(d.semana) ?? {papel: 0, sobre: 0};
+      const cur = mapa.get(d.semana) ?? {papel: 0, sobre: 0, fecha: d.fecha};
       cur.papel += d.papelConPostura;
       cur.sobre += d.sobreConCascarilla;
+      // Mantener la primera fecha encontrada (Lunes o Jueves de esa semana)
       mapa.set(d.semana, cur);
     }
   }
@@ -157,6 +160,7 @@ export function filasProyeccion(programaciones: ProgramacionDto[]): FilaProyecci
     .sort((a, b) => a[0] - b[0])
     .map(([semana, v]) => ({
       semana,
+      fecha: v.fecha,
       papel: v.papel,
       sobre: v.sobre,
       total: v.papel + v.sobre,

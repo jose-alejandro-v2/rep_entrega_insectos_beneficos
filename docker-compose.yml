@@ -1,11 +1,13 @@
-# Sistema de Control de Entrega de Insectos Benéficos
-# Infraestructura local de desarrollo (HITO-001 / vertical usuarios+auth).
-# Solo PostgreSQL 16; el backend Quarkus corre fuera de Docker en esta vertical.
-# Credenciales de DEV documentadas en backend/src/main/resources/application.properties.
+# Sistema de Control de Registro de Insectos Beneficos (entrega)
+# Infraestructura local de desarrollo. Backend Quarkus + PostgreSQL 16 + Nginx
+# todo dentro de Docker. Credenciales de DEV documentadas en
+# backend/src/main/resources/application.properties.
+name: repo_registro_insectos_beneficos
+
 services:
   postgres:
     image: postgres:16
-    container_name: insectos_beneficos_postgres
+    container_name: repo_registro_insectos_beneficos-postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: insectos_beneficos
@@ -21,5 +23,35 @@ services:
       timeout: 5s
       retries: 5
 
+  backend:
+    build:
+      context: ./backend
+    container_name: repo_registro_insectos_beneficos-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      TZ: America/Lima
+      QUARKUS_DATASOURCE_JDBC_URL: jdbc:postgresql://postgres:5432/insectos_beneficos
+      QUARKUS_DATASOURCE_USERNAME: insectos_dev
+      QUARKUS_DATASOURCE_PASSWORD: insectos_dev_password_2026
+    ports:
+      - "6101:6101"
+    volumes:
+      - uploads_data:/app/uploads
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: repo_registro_insectos_beneficos-nginx
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+
 volumes:
   pg_data:
+  uploads_data:

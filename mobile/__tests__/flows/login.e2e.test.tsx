@@ -144,9 +144,8 @@ describe('Flujo login — ServerCheck probe exitoso', () => {
   });
 
   test('ServerCheck: probe exitoso muestra estado checking y llama replace con Login', async () => {
-    let tree!: ReactTestRenderer.ReactTestRenderer;
     await act(async () => {
-      tree = ReactTestRenderer.create(
+      ReactTestRenderer.create(
         <NavigationContainer>
           <ServerCheckScreen />
         </NavigationContainer>,

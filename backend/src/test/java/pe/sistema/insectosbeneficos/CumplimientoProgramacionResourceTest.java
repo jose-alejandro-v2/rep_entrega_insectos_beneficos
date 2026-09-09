@@ -39,13 +39,14 @@ public class CumplimientoProgramacionResourceTest {
 
     @Test
     public void testGuardarCumplimiento() {
-        // Crear programación
+        // Crear programación — mes 10 único en esta clase para evitar colisión con
+        // testListarCumplimientoSinDatos (2026/9) al compartir BD Testcontainers.
         Integer programacionId = given()
             .auth().oauth2(TestSupport.seedToken())
             .contentType(ContentType.JSON)
             .body(Map.of(
                 "anio", 2026,
-                "mes", 9,
+                "mes", 10,
                 "especieId", 1
             ))
             .when().post("/api/v1/programaciones")
@@ -59,7 +60,7 @@ public class CumplimientoProgramacionResourceTest {
             .when().get("/api/v1/programaciones/" + programacionId)
             .then()
             .statusCode(200)
-            .extract().jsonPath().getInt("detalles.detalles[0].id");
+            .extract().jsonPath().getInt("detalles[0].id");
 
         // Guardar cumplimiento
         given()
@@ -82,13 +83,13 @@ public class CumplimientoProgramacionResourceTest {
 
     @Test
     public void testGuardarCumplimientoValidacionNegativo() {
-        // Crear programación
+        // Crear programación — mes 11 único en esta clase para evitar colisión.
         Integer programacionId = given()
             .auth().oauth2(TestSupport.seedToken())
             .contentType(ContentType.JSON)
             .body(Map.of(
                 "anio", 2026,
-                "mes", 9,
+                "mes", 11,
                 "especieId", 1
             ))
             .when().post("/api/v1/programaciones")
@@ -101,7 +102,7 @@ public class CumplimientoProgramacionResourceTest {
             .when().get("/api/v1/programaciones/" + programacionId)
             .then()
             .statusCode(200)
-            .extract().jsonPath().getInt("detalles.detalles[0].id");
+            .extract().jsonPath().getInt("detalles[0].id");
 
         // Intentar guardar con valores negativos
         given()

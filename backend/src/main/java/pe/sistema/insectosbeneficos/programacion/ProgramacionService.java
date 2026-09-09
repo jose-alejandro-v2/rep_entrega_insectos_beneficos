@@ -107,7 +107,12 @@ public class ProgramacionService {
 
     @Transactional
     public ProgramacionDto updateProgramacion(Long id, UpdateProgramacionRequest request) {
-        verificarDiaEdicion();
+        // El volcado inicial del flujo crear (POST → PUT) no pasa por la
+        // restricción de día (HITO-016): solo la edición queda limitada a L/J.
+        boolean esCreacionInicial = Boolean.TRUE.equals(request.getEsCreacionInicial());
+        if (!esCreacionInicial) {
+            verificarDiaEdicion();
+        }
 
         Programacion p = programacionRepository.findByIdOptional(id)
                 .orElseThrow(() -> new ApiException(jakarta.ws.rs.core.Response.Status.NOT_FOUND, "PROGRAMACION_NO_ENCONTRADA", "Programacion no encontrada"));

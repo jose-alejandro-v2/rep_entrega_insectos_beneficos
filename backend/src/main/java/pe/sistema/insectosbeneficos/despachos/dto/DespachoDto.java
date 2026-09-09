@@ -1,4 +1,4 @@
-package pe.sistema.insectosbeneficos.despachos;
+package pe.sistema.insectosbeneficos.despachos.dto;
 
 import java.math.BigDecimal;
 import java.time.Instant;

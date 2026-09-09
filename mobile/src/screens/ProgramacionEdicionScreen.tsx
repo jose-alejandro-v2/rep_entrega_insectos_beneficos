@@ -12,8 +12,11 @@
  *     notificando por correo a Sanidad (RF-145/146).
  *
  * Restricciones:
- *  - Edición SOLO lunes y jueves 00:00-23:59 (RF-147/148): fuera de esos
- *    días los inputs y "Enviar stock" quedan deshabilitados.
+ *  - CREAR una programación: disponible cualquier día (HITO-016); la tabla del
+ *    mes se muestra al entrar a "Nuevo" sin esperar a seleccionar especie.
+ *  - Edición de una programación existente SOLO lunes y jueves 00:00-23:59
+ *    (RF-147/148): fuera de esos días los inputs y "Enviar stock" quedan
+ *    deshabilitados.
  *  - Una programación PUBLICADA (RN-038) no vuelve a editarse.
  */
 
@@ -127,7 +130,13 @@ export default function ProgramacionEdicionScreen() {
   const [especies, setEspecies] = useState<EspecieDto[]>([]);
   const [especieId, setEspecieId] = useState<number | null>(null);
   const [programacion, setProgramacion] = useState<ProgramacionDto | null>(null);
-  const [filas, setFilas] = useState<FilaEditable[]>([]);
+  // En modo crear la tabla se genera al montar (HITO-016): visible e habilitada
+  // de inmediato, sin esperar a seleccionar especie.
+  const [filas, setFilas] = useState<FilaEditable[]>(() =>
+    modo === 'crear'
+      ? generarFilasVacias(anioInicial ?? anioActual(), mesInicial ?? mesActual())
+      : [],
+  );
   const [loading, setLoading] = useState(modo === 'editar'); // En modo 'crear' no hay carga inicial
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -150,7 +159,7 @@ export default function ProgramacionEdicionScreen() {
 
   const puedeEditar =
     modo === 'crear'
-      ? esDiaEditable()
+      ? true
       : esDiaEditable() && programacion?.estado === 'EN_PROCESO';
 
   /** Carga el catálogo de especies una única vez (montaje). */
@@ -252,14 +261,19 @@ export default function ProgramacionEdicionScreen() {
   const cambiarPeriodo = (mesSel: number, anioSel: number) => {
     setMes(mesSel);
     setAnio(anioSel);
-    seleccionarProgramacionDelPeriodo(mesSel, anioSel, especieId);
+    if (modo === 'crear') {
+      // El mes cambia → se regeneran las filas vacías (la tabla siempre visible).
+      setFilas(generarFilasVacias(anioSel, mesSel));
+    } else {
+      seleccionarProgramacionDelPeriodo(mesSel, anioSel, especieId);
+    }
   };
 
   const cambiarEspecie = (id: number) => {
     setEspecieId(id);
     if (modo === 'crear') {
-      // Generar filas vacías para la tabla
-      setFilas(generarFilasVacias(anio, mes));
+      // La tabla ya se muestra al montar; seleccionar especie solo habilita
+      // "Enviar stock" sin regenerar (no borrar lo digitado).
     } else {
       seleccionarProgramacionDelPeriodo(mes, anio, id);
     }
@@ -398,9 +412,11 @@ export default function ProgramacionEdicionScreen() {
     try {
       // 1. Crear programación (POST) — genera las filas vacías en backend
       const nueva = await crearProgramacion({anio, mes, especieId});
-      // 2. Actualizar con los valores editados (PUT)
+      // 2. Actualizar con los valores editados (PUT) — esCreacionInicial:true
+      //    omite la restricción de edición L/J para el volcado inicial (HITO-016).
       await actualizarProgramacion(nueva.id, {
         stockInicialBase: 5000,
+        esCreacionInicial: true,
         detalles: filas.map(f => ({
           id: f.detalleId > 0 ? f.detalleId : undefined,
           semana: f.semana,
@@ -561,7 +577,7 @@ export default function ProgramacionEdicionScreen() {
           </Text>
           {programacion ? chipEstado(programacion.estado) : null}
         </View>
-        {!esDiaEditable() ? (
+        {modo === 'editar' && !esDiaEditable() ? (
           <Text style={styles.avisoEdicion}>
             La edición solo está permitida los lunes y jueves de 00:00 a 23:59.
           </Text>
@@ -594,7 +610,7 @@ export default function ProgramacionEdicionScreen() {
           {renderPeriodo}
           {renderNotificacion}
           {modo === 'crear' ? (
-            // MODO CREAR: selector de especie + tabla + "Enviar stock" en un solo paso
+            // MODO CREAR: selector de especie + tabla (visible desde el montaje) + "Enviar stock"
             <>
               {renderEspecies}
               {filas.length > 0 && (
@@ -603,16 +619,11 @@ export default function ProgramacionEdicionScreen() {
                   {renderTabla()}
                 </>
               )}
-              {!esDiaEditable() ? (
-                <Text style={styles.avisoEdicion}>
-                  La creación solo está permitida los lunes y jueves de 00:00 a 23:59.
-                </Text>
-              ) : null}
               <AppButton
                 label="Enviar stock"
                 icon="send-outline"
                 loading={saving}
-                disabled={!especieId || !esDiaEditable() || filas.length === 0}
+                disabled={!especieId}
                 onPress={enviarStockCrear}
                 accessibilityLabel="Enviar stock"
               />

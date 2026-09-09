@@ -49,7 +49,7 @@ public class CatalogoResourceTest {
           .when().get("/api/v1/lotes")
           .then()
              .statusCode(200)
-             .body("size()", is(157));
+             .body("size()", is(191));
     }
 
     @Test

@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Sistema de Control de Entrega de Insectos Benéficos",
+    "subtitle": "Arquitectura de alto nivel — Stack actual (v1.8.0)",
+    "output": "sistema_insectos_beneficos.architecture.html",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    { "id": "mobile", "type": "frontend", "label": "React Native", "sublabel": "App Móvil Android", "pos": [40, 140], "size": [140, 60], "tag": "v1.8.0 · offline" },
+    { "id": "web", "type": "frontend", "label": "React + Vite", "sublabel": "Dashboard Web", "pos": [40, 260], "size": [140, 60], "tag": "pendiente" },
+    { "id": "nginx", "type": "cloud", "label": "Nginx", "sublabel": "Reverse Proxy", "pos": [280, 200], "size": [120, 60] },
+    { "id": "backend", "type": "backend", "label": "Quarkus", "sublabel": "API REST :8080", "pos": [480, 200], "size": [140, 60], "tag": "Java · /api/v1" },
+    { "id": "db", "type": "database", "label": "PostgreSQL", "sublabel": "BD Principal :5432", "pos": [700, 140], "size": [140, 60], "tag": "Flyway V1-V17" },
+    { "id": "filesystem", "type": "database", "label": "Filesystem", "sublabel": "Fotos JPG/PNG", "pos": [700, 260], "size": [140, 60], "tag": "≤5MB · max 2" },
+    { "id": "smtp", "type": "external", "label": "SMTP", "sublabel": "Correo Electrónico", "pos": [700, 380], "size": [120, 60] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "Servidor VPS Linux", "wraps": ["nginx", "backend", "db", "filesystem", "smtp"] }
+  ],
+  "connections": [
+    { "id": "mobile-api", "from": "mobile", "to": "nginx", "label": "HTTPS", "variant": "emphasis" },
+    { "id": "web-api", "from": "web", "to": "nginx", "label": "HTTPS", "variant": "dashed" },
+    { "id": "nginx-backend", "from": "nginx", "to": "backend", "label": "proxy_pass" },
+    { "id": "backend-db", "from": "backend", "to": "db", "label": "JDBC SQL" },
+    { "id": "backend-fs", "from": "backend", "to": "filesystem", "label": "upload", "labelAt": [720, 334] },
+    { "id": "backend-smtp", "from": "backend", "to": "smtp", "label": "SMTP", "variant": "dashed" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Frontend", "items": ["React Native CLI (Android) con modo offline", "React + Vite (web, pendiente de scaffold)"] },
+    { "dot": "emerald", "title": "Backend", "items": ["Quarkus Java + REST API /api/v1", "Autenticación JWT local (3 pasos)", "PostgreSQL + Flyway (V1-V17)"] },
+    { "dot": "rose", "title": "Datos", "items": ["Fotos: filesystem + metadatos inmutables", "Offline: SQLite + Drizzle ORM", "Actas PDF con iText"] }
+  ]
+}

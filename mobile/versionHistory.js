@@ -6,6 +6,19 @@
 
 const versionHistory = [
   {
+    version: '1.10.0',
+    fecha: '2026-09-09',
+    cambios: [
+      'Dockerización completa: backend Quarkus + nginx + PostgreSQL corriendo todo desde Docker (docker-compose "repo_registro_insectos_beneficos").',
+      'Backend en contenedor con zona horaria America/Lima (ENV TZ + -Duser.timezone) para alinear día de edición L/J con la hora de Perú.',
+      'Creación de programación disponible TODOS los días: el flujo crear (POST → PUT → publicar) ya no cae en la restricción L/J de edición.',
+      'Nueva tabla de programación se muestra de inmediato al entrar a "Nuevo" (sin esperar a seleccionar especie) y queda habilitada para digitar valores.',
+      'Al seleccionar especie en modo crear ya no se regenera la tabla (no borra lo digitado); la especie solo habilita "Enviar stock".',
+      'Backend: campo esCreacionInicial en UpdateProgramacionRequest + test determinístico de creación sin restricción de día.',
+      'Sincronización de versiones: package.json, build.gradle (versionCode 13), appVersion.ts a 1.10.0.',
+    ],
+  },
+  {
     version: '1.9.0',
     fecha: '2026-09-08',
     cambios: [

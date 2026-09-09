@@ -231,8 +231,8 @@ const TOKEN_KEY = 'accessToken'
 const API_URL_KEY = 'apiUrl'
 
 // URL por defecto (solo fallback, se sobreescribe con la guardada)
-const LAN_API_URL = 'http://10.13.18.168:8082/api/v1'
-const DEBUG_API_URL = 'http://127.0.0.1:8082/api/v1'
+const LAN_API_URL = 'http://10.13.18.168:6101/api/v1'
+const DEBUG_API_URL = 'http://127.0.0.1:6101/api/v1'
 const IS_DEVELOPMENT = typeof __DEV__ !== 'undefined' && __DEV__
 const FALLBACK_API_URL = IS_DEVELOPMENT ? DEBUG_API_URL : LAN_API_URL
 export const BUILT_IN_API_URL = normalizeApiUrl(process.env.API_URL || FALLBACK_API_URL)

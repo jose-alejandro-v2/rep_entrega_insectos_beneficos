@@ -2550,3 +2550,70 @@ para los 3 flujos críticos del sistema.
 | `cd mobile && npm test -- --runInBand` | 127 tests / 22 suites / 0 failures |
 
 **Estado**: Implementado y verificado. Commit `7b81116`.
+
+---
+
+# 65. HITO-016 — Docker del sistema + creación de programación todos los días + TZ fix
+
+**Responsable**: Orchestrator / Developer · **Fecha**: 2026-09-09 · **Versión**: 1.10.0 / versionCode 13.
+
+### 65.1 Docker del sistema
+
+docker-compose proyecto `repo_registro_insectos_beneficos` con 3 services:
+
+- `postgres` (postgres:16, healthcheck, volumen `pg_data`).
+- `backend` (imagen `repo_registro_insectos_beneficos-backend`, build multi-stage
+  `backend/Dockerfile`, `TZ: America/Lima`, puerto 6101, volumen `uploads_data` → `/app/uploads`).
+- `nginx` (nginx:1.27-alpine, `nginx/nginx.conf` → proxy `:80` → `http://backend:6101`, puerto 8080).
+
+El backend corre desde BD limpia aplicando Flyway V1-V17 al primer arranque. Verificado:
+`/q/openapi` 200 directo (`:6101`) y vía nginx (`:8080`), seeds aplicados (fundos 6, variedades 11,
+lotes 191, roles 3, super admin 1).
+
+### 65.2 TZ fix (America/Lima)
+
+- El backend en contenedor corría la JVM en UTC; el mobile usa hora Perú (UTC-5) → el día de
+  edición (L/J) podía no coincidir desde las 19:00.
+- Fix: `ENV TZ=America/Lima` en `Dockerfile` runtime + `-Duser.timezone=America/Lima` en el
+  `ENTRYPOINT` + `TZ: America/Lima` en compose.
+
+### 65.3 Creación de programación todos los días (backend)
+
+- `UpdateProgramacionRequest` + campo `esCreacionInicial` (Boolean, default `false`).
+- `ProgramacionService.updateProgramacion()`: omite `verificarDiaEdicion()` cuando
+  `esCreacionInicial == true` (volcado inicial del flujo crear POST → PUT → publicar). La edición
+  de una programación existente **sigue** restringida a Lunes/Jueves (RF-147/148).
+- Test determinístico `testPutConEsCreacionInicial_permiteVolcadoInicialCualquierDia` en
+  `ProgramacionResourceTest`: POST (2096/3/especie 1) → PUT `esCreacionInicial:true` → 200 sin
+  importar el día de ejecución.
+
+### 65.4 UX: tabla de "Nuevo" visible de inmediato (mobile)
+
+- `ProgramacionEdicionScreen` modo crear:
+  - `filas` se generan al montar (`generarFilasVacias(anio, mes)` desde los params del listado) →
+    la tabla del mes aparece habilitada sin seleccionar especie.
+  - `cambiarPeriodo` en crear regenera las filas del mes (antes las vaciaba ocultando la tabla).
+  - `cambiarEspecie` en crear ya no regenera filas (evita perder lo digitado); la especie solo
+    habilita "Enviar stock".
+  - `puedeEditar` siempre `true` en crear; PUT del flujo crear envía `esCreacionInicial:true`.
+  - Se eliminó el aviso/restricción "La creación solo está permitida los lunes y jueves…".
+- `ApiClient.ts`: `ActualizarProgramacionRequest.esCreacionInicial?: boolean`.
+
+### 65.5 Fix pre-existente (Ley 5)
+
+`DespachoDto.java` tenía `package pe.sistema.insectosbeneficios...` (error de escritura desde
+HITO-015) que rompía el build limpio; corregido a `pe.sistema.insectosbeneficos.despachos.dto`.
+
+### 65.6 Verificación
+
+| Comando | Resultado |
+|---|---|
+| `docker compose up -d --build` | ✅ 3 contenedores up |
+| `curl :8080/q/openapi` / `:6101/q/openapi` | ✅ 200 vía nginx y directo |
+| `mvn test -Dtest=ProgramacionResourceTest` | ✅ PASS |
+| `npm run lint` | ✅ PASS |
+| `npm test -- --runInBand` | ✅ PASS |
+| Smoke PUT crear: sin flag → 400 `EDICION_NO_PERMITIDA` / con flag → 200 | ✅ |
+
+**Estado**: Implementado, verificado y comiteado (HITO-016, v1.10.0). Rebuild de APK release
+(versionCode 13) pendiente tras cierre.

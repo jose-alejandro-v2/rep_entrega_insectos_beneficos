@@ -5,27 +5,27 @@
 -- BAYAS" completo; "Lepidópteros larva" -> "LEPIDÓPTEROS LARVA".
 
 INSERT INTO etapas_fenologicas (nombre) VALUES
-    ('FORMACIÓN'),
-    ('POST COSECHA'),
-    ('BROTACIÓN'),
-    ('FLORACIÓN Y CUAJA'),
-    ('CRECIMIENTO DE BAYAS'),
-    ('ENVERO'),
-    ('COSECHA');
+    ('Formación'),
+    ('Post Cosecha'),
+    ('Brotación'),
+    ('Floración y Cuaja'),
+    ('Crecimiento de Bayas'),
+    ('Envero'),
+    ('Cosecha');
 
 INSERT INTO plagas (nombre) VALUES
-    ('PSEUDOCOCCIDAE'),
-    ('TRIPS'),
-    ('ARAÑITA ROJA'),
-    ('LEPIDÓPTEROS LARVA'),
-    ('ACARO HIALINO');
+    ('Pseudococcidae'),
+    ('Trips'),
+    ('Arañita Roja'),
+    ('Lepidópteros Larva'),
+    ('Ácaro Hialino');
 
 INSERT INTO nematodos (nombre) VALUES
-    ('MELOIDOGYNE SPP.'),
-    ('XIPHINEMA INDEX'),
-    ('LONGIDORUS SPP.'),
-    ('PRATYLENCHUS SPP.'),
-    ('TYLENCHULUS SEMIPENETRANS');
+    ('Meloidogyne spp.'),
+    ('Xiphinema index'),
+    ('Longidorus spp.'),
+    ('Pratylenchus spp.'),
+    ('Tylenchulus semipenetrans');
 
 INSERT INTO patrones (nombre) VALUES
     ('SALT CREEK'),
