@@ -6,31 +6,17 @@
  * Muestra por semana: Sem | Papel | Sobre | Total (RN-019) y una barra de
  * progreso que mide visualmente el consumo mensual vs la disponibilidad.
  *
- * La columna "Sem" muestra el número de semana calendario (1-5) basado en
- * la fecha real del detalle, con sombreado alternado por semana.
+ * La columna "Sem" muestra el número de semana calendario ISO (ej. 32, 33)
+ * basado en la fecha real del detalle, con sombreado alternado por semana.
  */
 
 import React from 'react';
 import {StyleSheet, Text, View} from 'react-native';
 import AppCard from './AppCard';
 import {theme} from '../theme';
+import {semanaCalendario} from '../utils/programacion';
 import type {FilaProyeccion} from '../utils/requerimientos';
 import {porcentajeConsumo} from '../utils/requerimientos';
-
-/**
- * Calcula el número de semana calendario (1-5) a partir de una fecha ISO.
- * Una semana calendario inicia en Lunes. La primera semana del mes que
- * contiene un Lunes es la semana 1.
- */
-function semanaCalendario(fechaISO: string): number {
-  const fecha = new Date(fechaISO + 'T00:00:00');
-  const dia = fecha.getDate();
-  // Fórmula: semana = ((día - 1) + offset_del_dia_inicial) / 7 + 1
-  // Donde offset_del_dia_inicial es el día de la semana del día 1 del mes
-  const primerDiaMes = new Date(fecha.getFullYear(), fecha.getMonth(), 1);
-  const offset = (primerDiaMes.getDay() + 6) % 7; // 0=Lun, 1=Mar, ..., 6=Dom
-  return Math.floor((dia + offset - 1) / 7) + 1;
-}
 
 interface Props {
   filas: FilaProyeccion[];
