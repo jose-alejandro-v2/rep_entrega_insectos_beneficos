@@ -10,6 +10,7 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZonedDateTime;
+import java.time.temporal.IsoFields;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -56,9 +57,9 @@ public class ProgramacionService {
             if (dow == DayOfWeek.MONDAY || dow == DayOfWeek.THURSDAY) {
                 DetalleProgramacion d = new DetalleProgramacion();
                 d.setProgramacion(p);
-                // Semana del mes (1..5): agrupa el Lunes+Jueves de una misma semana para
-                // el fondo alternado. NO es única (la unicidad es por `fecha`).
-                d.setSemana(((day - 1) / 7) + 1);
+                // Semana calendario ISO (ej. 32, 33) derivada de la fecha; es la que
+                // se persiste en detalle_programaciones.semana (no 1..5).
+                d.setSemana((int) fecha.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR));
                 d.setFecha(fecha);
                 d.setPapelConPostura(0);
                 d.setSobreConCascarilla(0);

@@ -82,6 +82,7 @@ const REQUERIMIENTO_DTO = {
   fundo: 'Fundo Norte',
   loteId: 10,
   lote: 'Lote A',
+  lotes: [{id: 10, nombre: 'Lote A'}],
   especieId: 1,
   especie: 'Chrysopa sp.',
   etapaFenologicaId: 1,
@@ -89,6 +90,7 @@ const REQUERIMIENTO_DTO = {
   cantidad: 20,
   plagaId: 1,
   plaga: 'Pulga',
+  plagas: [{id: 1, nombre: 'Pulga'}],
   estado: 'REGISTRADO' as const,
   stockDisponible: 30,
   observaciones: 'Observación original',
@@ -114,13 +116,6 @@ const FOTOS_DTO = [
   },
 ];
 
-const FOTO_ASSET = {
-  uri: 'file:///tmp/foto.jpg',
-  type: 'image/jpeg',
-  fileName: 'foto1.jpg',
-  fileSize: 1024000,
-};
-
 /* ------------------------------------------------------------------ */
 /* Helpers                                                             */
 /* ------------------------------------------------------------------ */
@@ -135,6 +130,26 @@ async function elegirOpcion(
   });
   await act(async () => {
     findByLabel(tree, opcion).props.onPress();
+  });
+  await act(async () => {
+    await flushPromises();
+  });
+}
+
+/** Selecciona una opción en un MultiSelectField (requiere presionar "Listo" para cerrar). */
+async function elegirMultiOpcion(
+  tree: ReactTestRenderer.ReactTestRenderer,
+  campo: string,
+  opcion: string,
+) {
+  await act(async () => {
+    findByLabel(tree, campo).props.onPress();
+  });
+  await act(async () => {
+    findByLabel(tree, opcion).props.onPress();
+  });
+  await act(async () => {
+    findByLabel(tree, 'Confirmar selección').props.onPress();
   });
   await act(async () => {
     await flushPromises();
@@ -196,8 +211,8 @@ describe('Flujo requerimiento — crear nuevo requerimiento', () => {
     // ── Paso 1: seleccionar Fundo ────────────────────────────────────
     await elegirOpcion(tree, 'Fundo', 'Opción Fundo Fundo Norte');
 
-    // ── Paso 2: seleccionar Lote ─────────────────────────────────────
-    await elegirOpcion(tree, 'Lote', 'Opción Lote Lote A');
+    // ── Paso 2: seleccionar Lote (multi-select) ─────────────────────
+    await elegirMultiOpcion(tree, 'Lote', 'Opción Lote Lote A');
 
     // ── Paso 3: seleccionar Especie → stock se actualiza ─────────────
     await elegirOpcion(tree, 'Especie', 'Opción Especie Chrysopa sp.');
@@ -206,8 +221,8 @@ describe('Flujo requerimiento — crear nuevo requerimiento', () => {
     // ── Paso 4: seleccionar Etapa fenológica ─────────────────────────
     await elegirOpcion(tree, 'Etapa fenológica', 'Opción Etapa Emergencia');
 
-    // ── Paso 5: seleccionar Plaga objetivo ───────────────────────────
-    await elegirOpcion(tree, 'Plaga objetivo', 'Opción Plaga Pulga');
+    // ── Paso 5: seleccionar Plaga objetivo (multi-select) ────────────
+    await elegirMultiOpcion(tree, 'Plaga objetivo', 'Opción Plaga Pulga');
 
     // ── Paso 6: ingresar cantidad ────────────────────────────────────
     await act(async () => {
@@ -233,99 +248,15 @@ describe('Flujo requerimiento — crear nuevo requerimiento', () => {
       '/requerimientos',
       expect.objectContaining({
         fundoId: 1,
-        loteId: 10,
+        lotes: [10],
         especieId: 1,
         etapaFenologicaId: 1,
         cantidad: 20,
-        plagaId: 1,
+        plagas: [1],
       }),
     );
 
     // ── Verificar: navegación de regreso ─────────────────────────────
-    expect(mockGoBack).toHaveBeenCalled();
-  });
-
-  test('flujo crear con foto: agrega foto y sube al crear', async () => {
-    const api = getMockApi();
-    api.get.mockImplementation((url: string) => {
-      if (url === '/fundos') return Promise.resolve({data: FUNDOS});
-      if (url === '/lotes') return Promise.resolve({data: LOTES});
-      if (url === '/especies') return Promise.resolve({data: ESPECIES});
-      if (url === '/etapas-fenologicas') return Promise.resolve({data: ETAPAS});
-      if (url === '/plagas') return Promise.resolve({data: PLAGAS});
-      if (url === '/programaciones/1/stock') return Promise.resolve({data: {stock: 30}});
-      return Promise.resolve({data: []});
-    });
-    api.post.mockImplementation((url: string) => {
-      if (url === '/requerimientos') {
-        return Promise.resolve({data: {id: 99, estado: 'REGISTRADO'}});
-      }
-      return Promise.resolve({data: {id: 1, ruta: '/fotos/1.jpg'}});
-    });
-
-    (Keychain.getGenericPassword as jest.Mock).mockImplementation(
-      (options?: {service?: string}) =>
-        options?.service === 'accessToken' ? {password: TOKEN_USUARIO} : null,
-    );
-
-    let tree!: ReactTestRenderer.ReactTestRenderer;
-    await act(async () => {
-      tree = ReactTestRenderer.create(<NuevoRequerimientoScreen />);
-      await flushPromises();
-      await flushPromises();
-    });
-
-    // Seleccionar campos
-    await elegirOpcion(tree, 'Fundo', 'Opción Fundo Fundo Norte');
-    await elegirOpcion(tree, 'Lote', 'Opción Lote Lote A');
-    await elegirOpcion(tree, 'Especie', 'Opción Especie Chrysopa sp.');
-    await elegirOpcion(tree, 'Etapa fenológica', 'Opción Etapa Emergencia');
-    await elegirOpcion(tree, 'Plaga objetivo', 'Opción Plaga Pulga');
-
-    await act(async () => {
-      findByLabel(tree, 'Cantidad').props.onChangeText('20');
-    });
-    await act(async () => {
-      await flushPromises();
-    });
-
-    // Agregar foto desde galería
-    (launchImageLibrary as jest.Mock).mockResolvedValue({
-      didCancel: false,
-      assets: [FOTO_ASSET],
-    });
-
-    await act(async () => {
-      findByLabel(tree, 'Seleccionar foto de la galería').props.onPress();
-    });
-    await act(async () => {
-      await flushPromises();
-    });
-
-    // Verificar que la foto aparece (botón quitar)
-    const quitarBtns = tree.root.findAll(
-      (node: any) => node.props.accessibilityLabel === 'Quitar foto 1',
-    );
-    expect(quitarBtns.length).toBeGreaterThanOrEqual(1);
-
-    // Enviar
-    await act(async () => {
-      findByLabel(tree, 'Enviar Solicitud').props.onPress();
-    });
-    await act(async () => {
-      await flushPromises();
-    });
-
-    // Verificar: POST de requerimiento y POST de foto
-    expect(api.post).toHaveBeenCalledWith(
-      '/requerimientos',
-      expect.objectContaining({fundoId: 1}),
-    );
-    expect(api.post).toHaveBeenCalledWith(
-      '/requerimientos/99/fotos',
-      expect.any(FormData),
-      expect.objectContaining({headers: {'Content-Type': 'multipart/form-data'}}),
-    );
     expect(mockGoBack).toHaveBeenCalled();
   });
 
@@ -655,7 +586,7 @@ describe('Flujo requerimiento — historial con detalle', () => {
     expect(tituloAfter.length).toBe(0);
   });
 
-  test('botón "Ver Detalle" navega a DetalleRequerimiento', async () => {
+  test('botón "Ver Detalle" ya no existe (eliminado como redundante)', async () => {
     const api = getMockApi();
     api.get.mockImplementation((url: string) => {
       if (url === '/requerimientos') {
@@ -682,13 +613,17 @@ describe('Flujo requerimiento — historial con detalle', () => {
       await flushPromises();
     });
 
-    // Presionar "Ver Detalle"
-    await act(async () => {
-      findByLabel(tree, 'Detalle de Chrysopa sp.').props.onPress();
-    });
-
-    // Verificar: navegación a DetalleRequerimiento con el ID correcto
-    expect(mockNavigate).toHaveBeenCalledWith('DetalleRequerimiento', {id: 42});
+    // "Ver Detalle" fue eliminado (redundante con "Ver"); solo debe existir "Ver" y "Editar".
+    const botonDetalle = tree.root.findAll(
+      (node: any) =>
+        node.props?.accessibilityLabel === 'Detalle de Chrysopa sp.',
+    );
+    expect(botonDetalle.length).toBe(0);
+    const botonEditar = tree.root.findAll(
+      (node: any) =>
+        node.props?.accessibilityLabel === 'Editar Chrysopa sp.',
+    );
+    expect(botonEditar.length).toBeGreaterThan(0);
   });
 
   test('botón "Editar" navega a EditarRequerimiento', async () => {

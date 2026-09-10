@@ -37,6 +37,11 @@ public class FotoRequerimiento {
     @Column(columnDefinition = "text")
     private String metadatos;
 
+    /** Bytes crudos de la imagen (BYTEA, V20). Nullable para fotos legacy (V11). */
+    @Basic(fetch = FetchType.LAZY)
+    @Column(columnDefinition = "BYTEA")
+    private byte[] contenido;
+
     @Column(name = "creado_en", updatable = false)
     private Instant creadoEn = Instant.now();
 
@@ -52,6 +57,9 @@ public class FotoRequerimiento {
 
     public String getRuta() { return ruta; }
     public void setRuta(String ruta) { this.ruta = ruta; }
+
+    public byte[] getContenido() { return contenido; }
+    public void setContenido(byte[] contenido) { this.contenido = contenido; }
 
     public String getNombreArchivo() { return nombreArchivo; }
     public void setNombreArchivo(String nombreArchivo) { this.nombreArchivo = nombreArchivo; }

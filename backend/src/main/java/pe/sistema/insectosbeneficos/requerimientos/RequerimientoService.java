@@ -12,6 +12,7 @@ import pe.sistema.insectosbeneficos.catalogos.Lote;
 import pe.sistema.insectosbeneficos.catalogos.LoteRepository;
 import pe.sistema.insectosbeneficos.catalogos.Plaga;
 import pe.sistema.insectosbeneficos.catalogos.PlagaRepository;
+import pe.sistema.insectosbeneficos.programacion.DetalleProgramacionRepository;
 import pe.sistema.insectosbeneficos.programacion.Especie;
 import pe.sistema.insectosbeneficos.programacion.EspecieRepository;
 import pe.sistema.insectosbeneficos.programacion.Programacion;
@@ -23,8 +24,10 @@ import pe.sistema.insectosbeneficos.seguridad.ActualUsuario;
 import pe.sistema.insectosbeneficos.seguridad.ApiException;
 
 import java.math.BigDecimal;
+import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -50,6 +53,9 @@ public class RequerimientoService {
     ProgramacionRepository programacionRepository;
 
     @Inject
+    DetalleProgramacionRepository detalleProgramacionRepository;
+
+    @Inject
     EspecieRepository especieRepository;
 
     @Inject
@@ -63,6 +69,12 @@ public class RequerimientoService {
 
     @Inject
     PlagaRepository plagaRepository;
+
+    @Inject
+    RequerimientoLoteRepository requerimientoLoteRepository;
+
+    @Inject
+    RequerimientoPlagaRepository requerimientoPlagaRepository;
 
     @Inject
     RequerimientoMapper mapper;
@@ -89,20 +101,42 @@ public class RequerimientoService {
 
     /**
      * Stock disponible en tiempo real de una especie (Screen 10 del mobile).
-     * Usa la programación más reciente de la especie (anio+mes desc):
-     * stockInicialBase - suma de requerimientos de la especie, nunca < 0.
-     * Si no hay programación para la especie → 0.
+     * Calcula la fecha de corte según el día actual (último Lunes o Jueves)
+     * y busca el stockFinal del detalle de programación más reciente con
+     * fecha <= fechaCorte para la especie dada.
+     *
+     * Lógica de fechaCorte:
+     *   - Lunes/Martes/Miércoles → último Lunes
+     *   - Jueves/Viernes/Sábado/Domingo → último Jueves
+     *
+     * Si no hay detalle de programación para la especie → 0.
      */
     public BigDecimal getStockDisponible(Long especiaId) {
-        List<Programacion> progs = programacionRepository.list(
-                "especie.id = ?1 order by anio desc, mes desc", especiaId);
-        if (progs.isEmpty()) {
-            return BigDecimal.ZERO;
+        LocalDate fechaCorte = calcularFechaCorteStock();
+        return detalleProgramacionRepository
+                .findStockFinalByEspecieAndFechaCorte(especiaId, fechaCorte)
+                .map(d -> BigDecimal.valueOf(d.getStockFinal()))
+                .orElse(BigDecimal.ZERO);
+    }
+
+    /**
+     * Calcula la fecha de corte para determinar el stock del último Lunes o Jueves.
+     * <ul>
+     *   <li>Lunes(1)/Martes(2)/Miércoles(3) → último Lunes</li>
+     *   <li>Jueves(4)/Viernes(5)/Sábado(6)/Domingo(7) → último Jueves</li>
+     * </ul>
+     */
+    private LocalDate calcularFechaCorteStock() {
+        LocalDate hoy = LocalDate.now();
+        DayOfWeek dow = hoy.getDayOfWeek();
+        int diasDesdeLunes = dow.getValue() - 1; // 0=Lun, 1=Mar, ..., 6=Dom
+
+        if (dow.getValue() <= 3) { // Lun/Mar/Mie → último Lunes
+            return hoy.minusDays(diasDesdeLunes);
+        } else { // Jue/Vie/Sab/Dom → último Jueves
+            int diasDesdeJueves = (dow.getValue() - 4 + 7) % 7;
+            return hoy.minusDays(diasDesdeJueves);
         }
-        Programacion ultima = progs.get(0);
-        BigDecimal base = BigDecimal.valueOf(ultima.getStockInicialBase());
-        BigDecimal requerido = requerimientoRepository.sumCantidadByEspecie(especiaId);
-        return base.subtract(requerido).max(BigDecimal.ZERO);
     }
 
     // ------------------------------------------------------------------
@@ -116,14 +150,29 @@ public class RequerimientoService {
         Fundo fundo = fundoRepository.findByIdOptional(req.getFundoId())
                 .orElseThrow(() -> new ApiException(Response.Status.NOT_FOUND,
                         "FUNDO_NO_EXISTE", "Fundo no encontrado"));
-        Lote lote = loteRepository.findByIdOptional(req.getLoteId())
-                .orElseThrow(() -> new ApiException(Response.Status.NOT_FOUND,
-                        "LOTE_NO_EXISTE", "Lote no encontrado"));
         Especie especie = especieRepository.findByIdOptional(req.getEspecieId())
                 .orElseThrow(() -> new ApiException(Response.Status.NOT_FOUND,
                         "ESPECIE_NO_EXISTE", "Especie no encontrada"));
         EtapaFenologica etapa = resolverEtapa(req.getEtapaFenologicaId());
-        Plaga plaga = resolverPlaga(req.getPlagaId());
+
+        // Resolver lotes: lista tiene prioridad sobre loteId legacy
+        List<Long> loteIds = resolverLoteIds(req);
+        if (loteIds.isEmpty()) {
+            throw new ApiException(Response.Status.BAD_REQUEST,
+                    "LOTE_REQUERIDO", "Debe especificar al menos un lote");
+        }
+        Lote primerLote = loteRepository.findByIdOptional(loteIds.get(0))
+                .orElseThrow(() -> new ApiException(Response.Status.NOT_FOUND,
+                        "LOTE_NO_EXISTE", "Lote no encontrado"));
+
+        // Resolver plagas: lista tiene prioridad sobre plagaId legacy
+        List<Long> plagaIds = resolverPlagaIds(req);
+        Plaga primerPlaga = null;
+        if (!plagaIds.isEmpty()) {
+            primerPlaga = plagaRepository.findByIdOptional(plagaIds.get(0))
+                    .orElseThrow(() -> new ApiException(Response.Status.NOT_FOUND,
+                            "PLAGA_NO_EXISTE", "Plaga no encontrada"));
+        }
 
         BigDecimal stock = getStockDisponible(especie.getId());
         if (req.getCantidad().compareTo(stock) > 0) {
@@ -134,11 +183,11 @@ public class RequerimientoService {
         Requerimiento r = new Requerimiento();
         r.setFecha(req.getFecha());
         r.setFundo(fundo);
-        r.setLote(lote);
+        r.setLote(primerLote);
         r.setEspecie(especie);
         r.setEtapaFenologica(etapa);
         r.setCantidad(req.getCantidad());
-        r.setPlaga(plaga);
+        r.setPlaga(primerPlaga);
         r.setEstado("REGISTRADO");
         r.setStockDisponible(stock);
         r.setObservaciones(req.getObservaciones());
@@ -146,6 +195,15 @@ public class RequerimientoService {
         r.setCreatedAt(Instant.now());
         r.setUpdatedAt(Instant.now());
         requerimientoRepository.persist(r);
+
+        // Guardar lotes en tabla pivote
+        persistirLotesPivote(r, loteIds);
+
+        // Guardar plagas en tabla pivote
+        if (!plagaIds.isEmpty()) {
+            persistirPlagasPivote(r, plagaIds);
+        }
+
         return mapper.toDto(r);
     }
 
@@ -160,25 +218,40 @@ public class RequerimientoService {
         Fundo fundo = fundoRepository.findByIdOptional(req.getFundoId())
                 .orElseThrow(() -> new ApiException(Response.Status.NOT_FOUND,
                         "FUNDO_NO_EXISTE", "Fundo no encontrado"));
-        Lote lote = loteRepository.findByIdOptional(req.getLoteId())
-                .orElseThrow(() -> new ApiException(Response.Status.NOT_FOUND,
-                        "LOTE_NO_EXISTE", "Lote no encontrado"));
         Especie especie = especieRepository.findByIdOptional(req.getEspecieId())
                 .orElseThrow(() -> new ApiException(Response.Status.NOT_FOUND,
                         "ESPECIE_NO_EXISTE", "Especie no encontrada"));
         EtapaFenologica etapa = resolverEtapa(req.getEtapaFenologicaId());
-        Plaga plaga = resolverPlaga(req.getPlagaId());
+
+        // Resolver lotes: lista tiene prioridad sobre loteId legacy
+        List<Long> loteIds = resolverLoteIdsActualizar(req);
+        if (loteIds.isEmpty()) {
+            throw new ApiException(Response.Status.BAD_REQUEST,
+                    "LOTE_REQUERIDO", "Debe especificar al menos un lote");
+        }
+        Lote primerLote = loteRepository.findByIdOptional(loteIds.get(0))
+                .orElseThrow(() -> new ApiException(Response.Status.NOT_FOUND,
+                        "LOTE_NO_EXISTE", "Lote no encontrado"));
+
+        // Resolver plagas: lista tiene prioridad sobre plagaId legacy
+        List<Long> plagaIds = resolverPlagaIdsActualizar(req);
+        Plaga primerPlaga = null;
+        if (!plagaIds.isEmpty()) {
+            primerPlaga = plagaRepository.findByIdOptional(plagaIds.get(0))
+                    .orElseThrow(() -> new ApiException(Response.Status.NOT_FOUND,
+                            "PLAGA_NO_EXISTE", "Plaga no encontrada"));
+        }
 
         validarTransicion(r.getEstado(), req.getEstado());
 
         // Aplica campos básicos
         r.setFecha(req.getFecha());
         r.setFundo(fundo);
-        r.setLote(lote);
+        r.setLote(primerLote);
         r.setEspecie(especie);
         r.setEtapaFenologica(etapa);
         r.setCantidad(req.getCantidad());
-        r.setPlaga(plaga);
+        r.setPlaga(primerPlaga);
         if (req.getObservaciones() != null) {
             r.setObservaciones(req.getObservaciones());
         }
@@ -198,6 +271,16 @@ public class RequerimientoService {
         r.setEstado(req.getEstado());
         r.setStockDisponible(getStockDisponible(especie.getId()));
         r.setUpdatedAt(Instant.now());
+
+        // Actualizar tablas pivote: eliminar y re-crear
+        eliminarLotesPivote(r);
+        persistirLotesPivote(r, loteIds);
+
+        eliminarPlagasPivote(r);
+        if (!plagaIds.isEmpty()) {
+            persistirPlagasPivote(r, plagaIds);
+        }
+
         return mapper.toDto(r);
     }
 
@@ -255,5 +338,101 @@ public class RequerimientoService {
         return plagaRepository.findByIdOptional(id)
                 .orElseThrow(() -> new ApiException(Response.Status.NOT_FOUND,
                         "PLAGA_NO_EXISTE", "Plaga no encontrada"));
+    }
+
+    // ------------------------------------------------------------------
+    // Helpers de selección múltiple (V19)
+    // ------------------------------------------------------------------
+
+    /**
+     * Resuelve los IDs de lotes desde el request de creación.
+     * La lista {@code lotes} tiene prioridad sobre {@code loteId} legacy.
+     */
+    private List<Long> resolverLoteIds(CrearRequerimientoRequest req) {
+        if (req.getLotes() != null && !req.getLotes().isEmpty()) {
+            return req.getLotes();
+        }
+        if (req.getLoteId() != null) {
+            return List.of(req.getLoteId());
+        }
+        return List.of();
+    }
+
+    /**
+     * Resuelve los IDs de lotes desde el request de actualización.
+     * La lista {@code lotes} tiene prioridad sobre {@code loteId} legacy.
+     */
+    private List<Long> resolverLoteIdsActualizar(ActualizarRequerimientoRequest req) {
+        if (req.getLotes() != null && !req.getLotes().isEmpty()) {
+            return req.getLotes();
+        }
+        if (req.getLoteId() != null) {
+            return List.of(req.getLoteId());
+        }
+        return List.of();
+    }
+
+    /**
+     * Resuelve los IDs de plagas desde el request de creación.
+     * La lista {@code plagas} tiene prioridad sobre {@code plagaId} legacy.
+     */
+    private List<Long> resolverPlagaIds(CrearRequerimientoRequest req) {
+        if (req.getPlagas() != null && !req.getPlagas().isEmpty()) {
+            return req.getPlagas();
+        }
+        if (req.getPlagaId() != null) {
+            return List.of(req.getPlagaId());
+        }
+        return List.of();
+    }
+
+    /**
+     * Resuelve los IDs de plagas desde el request de actualización.
+     * La lista {@code plagas} tiene prioridad sobre {@code plagaId} legacy.
+     */
+    private List<Long> resolverPlagaIdsActualizar(ActualizarRequerimientoRequest req) {
+        if (req.getPlagas() != null && !req.getPlagas().isEmpty()) {
+            return req.getPlagas();
+        }
+        if (req.getPlagaId() != null) {
+            return List.of(req.getPlagaId());
+        }
+        return List.of();
+    }
+
+    /** Persiste lotes en tabla pivote requerimiento_lotes. */
+    private void persistirLotesPivote(Requerimiento r, List<Long> loteIds) {
+        for (Long loteId : loteIds) {
+            Lote lote = loteRepository.findByIdOptional(loteId)
+                    .orElseThrow(() -> new ApiException(Response.Status.NOT_FOUND,
+                            "LOTE_NO_EXISTE", "Lote no encontrado: " + loteId));
+            RequerimientoLote rl = new RequerimientoLote();
+            rl.setRequerimiento(r);
+            rl.setLote(lote);
+            requerimientoLoteRepository.persist(rl);
+        }
+    }
+
+    /** Persiste plagas en tabla pivote requerimiento_plagas. */
+    private void persistirPlagasPivote(Requerimiento r, List<Long> plagaIds) {
+        for (Long plagaId : plagaIds) {
+            Plaga plaga = plagaRepository.findByIdOptional(plagaId)
+                    .orElseThrow(() -> new ApiException(Response.Status.NOT_FOUND,
+                            "PLAGA_NO_EXISTE", "Plaga no encontrada: " + plagaId));
+            RequerimientoPlaga rp = new RequerimientoPlaga();
+            rp.setRequerimiento(r);
+            rp.setPlaga(plaga);
+            requerimientoPlagaRepository.persist(rp);
+        }
+    }
+
+    /** Elimina todos los lotes pivote de un requerimiento (bulk delete). */
+    private void eliminarLotesPivote(Requerimiento r) {
+        requerimientoLoteRepository.delete("requerimiento.id = ?1", r.getId());
+    }
+
+    /** Elimina todas las plagas pivote de un requerimiento (bulk delete). */
+    private void eliminarPlagasPivote(Requerimiento r) {
+        requerimientoPlagaRepository.delete("requerimiento.id = ?1", r.getId());
     }
 }

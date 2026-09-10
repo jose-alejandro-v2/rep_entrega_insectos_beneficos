@@ -6,6 +6,21 @@
 
 const versionHistory = [
   {
+    version: '1.11.0',
+    fecha: '2026-09-09',
+    cambios: [
+      'Multi-select de Lotes y Plagas: selección múltiple con tablas pivote en BD (requerimiento_lotes, requerimiento_plagas).',
+      'Nuevo componente MultiSelectField con checkboxes y chips visuales.',
+      'Stock disponible ahora muestra el stock del último L o J (no el mensual 5000).',
+      'Fotos deshabilitadas al crear requerimiento (solo se usan en recepción/despacho).',
+      'Backend: migración V19 (tablas pivote), entities RequerimientoLote/Plaga, DTOs con listas.',
+      'Evidencia de entrega en estado Aprobado: la sección de fotos (cámara/galería) ahora también aplica en APROBADO, no solo en Entregado.',
+      'Botón "Ver Detalle" eliminado del historial (redundante) y botón "Acta PDF" eliminado del formulario admin.',
+      'El detalle de requerimiento (historial, edición y detalle) ahora muestra todos los lotes y plagas seleccionados.',
+      'Fotos almacenadas como bytes en la base de datos (BYTEA, migración V20) en lugar de archivos en disco; las fotos legacy V11 siguen soportadas.',
+    ],
+  },
+  {
     version: '1.10.0',
     fecha: '2026-09-09',
     cambios: [

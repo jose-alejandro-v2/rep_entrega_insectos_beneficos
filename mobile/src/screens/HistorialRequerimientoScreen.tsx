@@ -104,13 +104,21 @@ function VerModal({
   if (!req) {
     return null;
   }
+  const lotesTexto =
+    req.lotes?.length > 0
+      ? req.lotes.map(l => l.nombre).join(', ')
+      : req.lote;
+  const plagasTexto =
+    req.plagas?.length > 0
+      ? req.plagas.map(p => p.nombre).join(', ')
+      : req.plaga;
   const filas: Array<[string, string]> = [
     ['Fecha', formatFecha(req.fecha)],
     ['Fundo', req.fundo],
-    ['Lote', req.lote],
+    ['Lote', lotesTexto],
     ['Especie', req.especie],
     ['Cantidad', `${req.cantidad} millares`],
-    ['Plaga objetivo', req.plaga ?? '—'],
+    ['Plaga objetivo', plagasTexto || '—'],
     ['Fecha de liberación', formatFecha(req.fechaLiberacion)],
     ['Observaciones', req.observaciones ?? '—'],
   ];
@@ -303,15 +311,6 @@ export default function HistorialRequerimientoScreen() {
                   setVer(r);
                 }}
                 accessibilityLabel={`Ver ${r.especie}`}
-              />
-              <AppButton
-                label="Ver Detalle"
-                variant="text"
-                icon="information-outline"
-                onPress={() =>
-                  navigation.navigate('DetalleRequerimiento', {id: r.id})
-                }
-                accessibilityLabel={`Detalle de ${r.especie}`}
               />
               <AppButton
                 label="Editar"

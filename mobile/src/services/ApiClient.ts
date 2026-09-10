@@ -648,6 +648,8 @@ export interface RequerimientoDto {
   fundo: string;
   loteId: number;
   lote: string;
+  /** Lotes asociados al requerimiento (multi-select). */
+  lotes: Array<{id: number; nombre: string}>;
   especieId: number;
   especie: string;
   etapaFenologicaId: number | null;
@@ -655,6 +657,8 @@ export interface RequerimientoDto {
   cantidad: number;
   plagaId: number | null;
   plaga: string | null;
+  /** Plagas asociadas al requerimiento (multi-select). */
+  plagas: Array<{id: number; nombre: string}>;
   estado: EstadoRequerimiento;
   /** Stock disponible en el momento (solo lectura, Screen 10). */
   stockDisponible: number;
@@ -673,11 +677,17 @@ export interface RequerimientoDto {
 export interface CrearRequerimientoRequest {
   fecha: string;
   fundoId: number;
-  loteId: number;
+  /** @deprecated Usar `lotes` (multi-select). Mantenido por compatibilidad. */
+  loteId?: number;
+  /** IDs de los lotes seleccionados (multi-select). */
+  lotes: number[];
   especieId: number;
   etapaFenologicaId: number | null;
   cantidad: number;
-  plagaId: number | null;
+  /** @deprecated Usar `plagas` (multi-select). Mantenido por compatibilidad. */
+  plagaId?: number | null;
+  /** IDs de las plagas seleccionadas (multi-select). */
+  plagas: number[];
   observaciones?: string | null;
 }
 
@@ -685,11 +695,17 @@ export interface CrearRequerimientoRequest {
 export interface ActualizarRequerimientoRequest {
   fecha: string;
   fundoId: number;
-  loteId: number;
+  /** @deprecated Usar `lotes` (multi-select). Mantenido por compatibilidad. */
+  loteId?: number;
+  /** IDs de los lotes seleccionados (multi-select). */
+  lotes?: number[];
   especieId: number;
   etapaFenologicaId: number | null;
   cantidad: number;
-  plagaId: number | null;
+  /** @deprecated Usar `plagas` (multi-select). Mantenido por compatibilidad. */
+  plagaId?: number | null;
+  /** IDs de las plagas seleccionadas (multi-select). */
+  plagas?: number[];
   estado: EstadoRequerimiento;
   papelConPostura?: number | null;
   sobreConCascarilla?: number | null;

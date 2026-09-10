@@ -70,7 +70,7 @@ const DETALLE_AGOSTO = {
   detalles: [
     {
       id: 11,
-      semana: 1,
+      semana: 32,
       fecha: '2026-08-03',
       stockInicial: 5000,
       papelConPostura: 2000,
@@ -81,7 +81,7 @@ const DETALLE_AGOSTO = {
     },
     {
       id: 12,
-      semana: 1,
+      semana: 32,
       fecha: '2026-08-06',
       stockInicial: 2000,
       papelConPostura: 1000,
@@ -92,7 +92,7 @@ const DETALLE_AGOSTO = {
     },
     {
       id: 13,
-      semana: 2,
+      semana: 33,
       fecha: '2026-08-10',
       stockInicial: 500,
       papelConPostura: 1000,
@@ -103,7 +103,7 @@ const DETALLE_AGOSTO = {
     },
     {
       id: 14,
-      semana: 2,
+      semana: 33,
       fecha: '2026-08-13',
       stockInicial: -1000,
       papelConPostura: 0,
@@ -114,7 +114,7 @@ const DETALLE_AGOSTO = {
     },
     {
       id: 15,
-      semana: 3,
+      semana: 34,
       fecha: '2026-08-17',
       stockInicial: -1000,
       papelConPostura: 0,
@@ -125,7 +125,7 @@ const DETALLE_AGOSTO = {
     },
     {
       id: 16,
-      semana: 3,
+      semana: 34,
       fecha: '2026-08-20',
       stockInicial: -1000,
       papelConPostura: 0,
@@ -136,7 +136,7 @@ const DETALLE_AGOSTO = {
     },
     {
       id: 17,
-      semana: 4,
+      semana: 35,
       fecha: '2026-08-24',
       stockInicial: -1000,
       papelConPostura: 0,
@@ -147,7 +147,7 @@ const DETALLE_AGOSTO = {
     },
     {
       id: 18,
-      semana: 4,
+      semana: 35,
       fecha: '2026-08-27',
       stockInicial: -1000,
       papelConPostura: 0,
@@ -158,7 +158,7 @@ const DETALLE_AGOSTO = {
     },
     {
       id: 19,
-      semana: 5,
+      semana: 36,
       fecha: '2026-08-31',
       stockInicial: -1000,
       papelConPostura: 0,

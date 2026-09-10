@@ -45,13 +45,6 @@ const ESPECIES = [{id: 1, nombre: 'Chrysopa sp.', estado: true}];
 const ETAPAS = [{id: 1, nombre: 'Emergencia', estado: true}];
 const PLAGAS = [{id: 1, nombre: 'Pulga', estado: true}];
 
-const FOTO_ASSET = {
-  uri: 'file:///tmp/foto.jpg',
-  type: 'image/jpeg',
-  fileName: 'foto1.jpg',
-  fileSize: 1024000,
-};
-
 let api = getMockApi();
 const mockGoBack = jest.fn();
 
@@ -106,6 +99,26 @@ async function elegirOpcion(
   });
   await act(async () => {
     findByLabel(tree, opcion).props.onPress();
+  });
+  await act(async () => {
+    await flushPromises();
+  });
+}
+
+/** Selecciona una opción en un MultiSelectField (requiere presionar "Listo" para cerrar). */
+async function elegirMultiOpcion(
+  tree: ReactTestRenderer.ReactTestRenderer,
+  campo: string,
+  opcion: string,
+) {
+  await act(async () => {
+    findByLabel(tree, campo).props.onPress();
+  });
+  await act(async () => {
+    findByLabel(tree, opcion).props.onPress();
+  });
+  await act(async () => {
+    findByLabel(tree, 'Confirmar selección').props.onPress();
   });
   await act(async () => {
     await flushPromises();
@@ -167,10 +180,10 @@ describe('NuevoRequerimientoScreen — formulario user', () => {
     });
 
     await elegirOpcion(tree, 'Fundo', 'Opción Fundo Fundo Norte');
-    await elegirOpcion(tree, 'Lote', 'Opción Lote Lote A');
+    await elegirMultiOpcion(tree, 'Lote', 'Opción Lote Lote A');
     await elegirOpcion(tree, 'Especie', 'Opción Especie Chrysopa sp.');
     await elegirOpcion(tree, 'Etapa fenológica', 'Opción Etapa Emergencia');
-    await elegirOpcion(tree, 'Plaga objetivo', 'Opción Plaga Pulga');
+    await elegirMultiOpcion(tree, 'Plaga objetivo', 'Opción Plaga Pulga');
 
     await act(async () => {
       findByLabel(tree, 'Cantidad').props.onChangeText('20');
@@ -191,11 +204,11 @@ describe('NuevoRequerimientoScreen — formulario user', () => {
       '/requerimientos',
       expect.objectContaining({
         fundoId: 1,
-        loteId: 10,
+        lotes: [10],
         especieId: 1,
         etapaFenologicaId: 1,
         cantidad: 20,
-        plagaId: 1,
+        plagas: [1],
       }),
     );
     expect(mockGoBack).toHaveBeenCalled();
@@ -217,67 +230,5 @@ describe('NuevoRequerimientoScreen — formulario user', () => {
 
     expect(contarTexto(tree, 'La cantidad supera el stock disponible')).toBe(1);
     expect(findByLabel(tree, 'Enviar Solicitud').props.disabled).toBe(true);
-  });
-
-  test('sube fotos después de crear el requerimiento', async () => {
-    api.post.mockImplementation((url: string) => {
-      if (url === '/requerimientos') {
-        return Promise.resolve({data: {id: 99, estado: 'REGISTRADO'}});
-      }
-      return Promise.resolve({data: {id: 1, ruta: '/fotos/1.jpg'}});
-    });
-
-    const tree = await renderForm();
-    await act(async () => {
-      await flushPromises();
-    });
-
-    (launchImageLibrary as jest.Mock).mockResolvedValue({
-      didCancel: false,
-      assets: [FOTO_ASSET],
-    });
-
-    await elegirOpcion(tree, 'Fundo', 'Opción Fundo Fundo Norte');
-    await elegirOpcion(tree, 'Lote', 'Opción Lote Lote A');
-    await elegirOpcion(tree, 'Especie', 'Opción Especie Chrysopa sp.');
-    await elegirOpcion(tree, 'Etapa fenológica', 'Opción Etapa Emergencia');
-    await elegirOpcion(tree, 'Plaga objetivo', 'Opción Plaga Pulga');
-
-    await act(async () => {
-      findByLabel(tree, 'Cantidad').props.onChangeText('20');
-    });
-    await act(async () => {
-      await flushPromises();
-    });
-
-    await act(async () => {
-      findByLabel(tree, 'Seleccionar foto de la galería').props.onPress();
-    });
-    await act(async () => {
-      await flushPromises();
-    });
-
-    const quitarBtns = tree.root.findAll(
-      (node: any) => node.props.accessibilityLabel === 'Quitar foto 1',
-    );
-    expect(quitarBtns.length).toBeGreaterThanOrEqual(1);
-
-    await act(async () => {
-      findByLabel(tree, 'Enviar Solicitud').props.onPress();
-    });
-    await act(async () => {
-      await flushPromises();
-    });
-
-    expect(api.post).toHaveBeenCalledWith(
-      '/requerimientos',
-      expect.objectContaining({fundoId: 1}),
-    );
-    expect(api.post).toHaveBeenCalledWith(
-      '/requerimientos/99/fotos',
-      expect.any(FormData),
-      expect.objectContaining({headers: {'Content-Type': 'multipart/form-data'}}),
-    );
-    expect(mockGoBack).toHaveBeenCalled();
   });
 });

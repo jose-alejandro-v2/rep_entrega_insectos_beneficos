@@ -89,7 +89,7 @@ function aNumero(texto: string): number {
   return Number.isNaN(n) ? 0 : n;
 }
 
-/** Genera filas vacías para modo crear (replica la lógica del backend). */
+/** Genera filas vacías para modo crear (replica la lógica del backend ISO). */
 function generarFilasVacias(anio: number, mes: number): FilaEditable[] {
   const result: FilaEditable[] = [];
   let stockActual = 5000;
@@ -101,7 +101,7 @@ function generarFilasVacias(anio: number, mes: number): FilaEditable[] {
       const iso = `${anio}-${String(mes).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       result.push({
         detalleId: -day, // IDs negativos para filas no persistidas
-        semana: ((day - 1) / 7) + 1,
+        semana: semanaCalendario(iso),
         fecha: iso,
         stockInicial: stockActual,
         papel: '',

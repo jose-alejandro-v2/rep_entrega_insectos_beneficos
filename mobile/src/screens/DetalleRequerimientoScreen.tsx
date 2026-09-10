@@ -72,13 +72,21 @@ export default function DetalleRequerimientoScreen() {
       return <ErrorState title="Requerimiento no encontrado" />;
     }
 
+    const lotesTexto =
+      req.lotes?.length > 0
+        ? req.lotes.map(l => l.nombre).join(', ')
+        : req.lote;
+    const plagasTexto =
+      req.plagas?.length > 0
+        ? req.plagas.map(p => p.nombre).join(', ')
+        : req.plaga;
     const filas: Array<[string, string]> = [
       ['Fecha', formatFecha(req.fecha)],
       ['Fundo', req.fundo],
-      ['Lote', req.lote],
+      ['Lote', lotesTexto],
       ['Especie', req.especie],
       ['Cantidad', `${req.cantidad} millares`],
-      ['Plaga objetivo', req.plaga ?? '—'],
+      ['Plaga objetivo', plagasTexto || '—'],
       ['Fecha de liberación', formatFecha(req.fechaLiberacion)],
       ['Observaciones', req.observaciones ?? '—'],
     ];

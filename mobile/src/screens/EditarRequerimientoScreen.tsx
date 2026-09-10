@@ -34,6 +34,7 @@ import ErrorBoundary from '../components/ErrorBoundary';
 import ErrorState from '../components/ErrorState';
 import LoadingState from '../components/LoadingState';
 import SelectField from '../components/SelectField';
+import MultiSelectField from '../components/MultiSelectField';
 import {usePhotoCapture} from '../hooks/usePhotoCapture';
 import {useRequerimientosCatalogos} from '../hooks/useRequerimientosCatalogos';
 import type {RootStackParamList} from '../navigation/types';
@@ -82,10 +83,12 @@ export default function EditarRequerimientoScreen() {
   const [fechaInput, setFechaInput] = useState('');
   const [fundoId, setFundoId] = useState<number | null>(null);
   const [loteId, setLoteId] = useState<number | null>(null);
+  const [lotesIds, setLotesIds] = useState<number[]>([]);
   const [especieId, setEspecieId] = useState<number | null>(null);
   const [etapaId, setEtapaId] = useState<number | null>(null);
   const [cantidadTexto, setCantidadTexto] = useState('');
   const [plagaId, setPlagaId] = useState<number | null>(null);
+  const [plagasIds, setPlagasIds] = useState<number[]>([]);
   const [observaciones, setObservaciones] = useState('');
   const [fechaLiberacionInput, setFechaLiberacionInput] = useState('');
   const [horaLiberacion, setHoraLiberacion] = useState('');
@@ -119,10 +122,12 @@ export default function EditarRequerimientoScreen() {
         setFechaInput(r.fecha);
         setFundoId(r.fundoId);
         setLoteId(r.loteId);
+        setLotesIds((r.lotes ?? []).map(l => l.id));
         setEspecieId(r.especieId);
         setEtapaId(r.etapaFenologicaId);
         setCantidadTexto(String(r.cantidad));
         setPlagaId(r.plagaId);
+        setPlagasIds((r.plagas ?? []).map(p => p.id));
         setObservaciones(r.observaciones ?? '');
         setFechaLiberacionInput(r.fechaLiberacion ?? '');
         setHoraLiberacion(r.horaLiberacion ?? '');
@@ -186,11 +191,13 @@ export default function EditarRequerimientoScreen() {
       await actualizarRequerimiento(id, {
         fecha: fechaInput || hoyISO(),
         fundoId: fundoId!,
-        loteId: loteId!,
+        loteId: loteId ?? undefined,
+        lotes: lotesIds.length > 0 ? lotesIds : [loteId!],
         especieId: especieId!,
         etapaFenologicaId: etapaId,
         cantidad: cantidadDesdeTexto(cantidadTexto),
-        plagaId,
+        plagaId: plagaId ?? null,
+        plagas: plagasIds,
         estado: estado as never,
         fechaLiberacion: fechaLiberacionInput || null,
         horaLiberacion: horaLiberacion.trim() || null,
@@ -290,13 +297,13 @@ export default function EditarRequerimientoScreen() {
                   onSelect={v => setFundoId(Number(v))}
                   disabled
                 />
-                <SelectField
+                <MultiSelectField
                   label="Lote"
                   accessibilityLabel="Lote"
                   optionAccessibilityPrefix="Opción Lote"
-                  value={catalogo.lotes.find(l => l.id === loteId)?.nombre ?? ''}
+                  selectedValues={lotesIds}
                   options={opcionesLote}
-                  onSelect={v => setLoteId(Number(v))}
+                  onSelect={setLotesIds}
                   disabled
                 />
                 <SelectField
@@ -329,13 +336,13 @@ export default function EditarRequerimientoScreen() {
                     {stock != null ? `${stock} millares` : 'Cargando…'}
                   </Text>
                 </View>
-                <SelectField
+                <MultiSelectField
                   label="Plaga objetivo"
                   accessibilityLabel="Plaga objetivo"
                   optionAccessibilityPrefix="Opción Plaga"
-                  value={catalogo.plagas.find(p => p.id === plagaId)?.nombre ?? ''}
+                  selectedValues={plagasIds}
                   options={opcionesPlaga}
-                  onSelect={v => setPlagaId(Number(v))}
+                  onSelect={setPlagasIds}
                   disabled
                 />
                 <AppInput

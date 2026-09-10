@@ -230,11 +230,11 @@ export function validarCantidadVsStock(cantidad: number, stock: number): string 
 export interface FormularioRequerimientoBasico {
   fecha: string;
   fundoId: number | null;
-  loteId: number | null;
+  lotesIds: number[];
   especieId: number | null;
   etapaFenologicaId: number | null;
   cantidad: number;
-  plagaId: number | null;
+  plagasIds: number[];
   observaciones: string;
 }
 
@@ -249,7 +249,7 @@ export function camposObligatoriosFaltantes(
   if (f.fundoId == null) {
     faltan.push('Fundo');
   }
-  if (f.loteId == null) {
+  if (f.lotesIds.length === 0) {
     faltan.push('Lote');
   }
   if (f.especieId == null) {
@@ -260,9 +260,6 @@ export function camposObligatoriosFaltantes(
   }
   if (f.cantidad <= 0) {
     faltan.push('Cantidad');
-  }
-  if (f.plagaId == null) {
-    faltan.push('Plaga objetivo');
   }
   return faltan;
 }

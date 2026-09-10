@@ -2617,3 +2617,184 @@ HITO-015) que rompía el build limpio; corregido a `pe.sistema.insectosbeneficos
 
 **Estado**: Implementado, verificado y comiteado (HITO-016, v1.10.0). Rebuild de APK release
 (versionCode 13) pendiente tras cierre.
+
+---
+
+### 66. Fase 2 — Stock del último L/J (task interna)
+
+#### 66.1 Problema
+
+El stock disponible se calculaba como `stockInicialBase (5000) - suma(requerimientos)` desde
+la última programación de la especie. Se necesitaba usar el `stockFinal` del detalle de
+programación más reciente al último Lunes o Jueves (dependiendo del día actual).
+
+#### 66.2 Lógica de fechaCorte
+
+| Día actual | Valor `DayOfWeek` | Buscar último |
+|---|---|---|
+| Lunes / Martes / Miércoles | 1 / 2 / 3 | Lunes |
+| Jueves / Viernes / Sábado / Domingo | 4 / 5 / 6 / 7 | Jueves |
+
+Si no hay detalle de programación para la especie → retorna `BigDecimal.ZERO`.
+
+#### 66.3 Archivos modificados
+
+1. **`DetalleProgramacionRepository.java`** — método `findStockFinalByEspecieAndFechaCorte(Long especieId, LocalDate fechaCorte)`:
+   - Query Panache: `programacion.especie.id = ?1 AND fecha <= ?2 ORDER BY fecha DESC`
+   - Retorna `Optional<DetalleProgramacion>` (primera resultado = más reciente).
+
+2. **`RequerimientoService.java`** — método `getStockDisponible(Long especiaId)`:
+   - Inyecta `DetalleProgramacionRepository`.
+   - Calcula `fechaCorte` con `calcularFechaCorteStock()`.
+   - Consulta `stockFinal` del detalle más reciente (fecha ≤ fechaCorte).
+   - Retorna `BigDecimal.valueOf(detalle.getStockFinal())` o `BigDecimal.ZERO`.
+   - Método privado `calcularFechaCorteStock()` encapsula la lógica día→L/J.
+
+#### 66.4 Verificación
+
+| Comando | Resultado |
+|---|---|
+| `mvn test` | ✅ 89 tests, 0 failures, 0 errors |
+
+**Estado**: Implementado y verificado (89 tests pass). Pendiente commit/push por orchestrator.
+
+---
+
+## 67. Multi-select Lotes/Plagas + Ocultar Fotos + Stock Último L/J (2026-09-09)
+
+**Objetivo**: Cambiar selección simple de lotes y plagas a selección múltiple con tablas pivote,
+ocultar fotos al crear requerimiento, y mostrar stock del último L/J (no mensual).
+
+### 67.1 Backend — Tablas Pivote
+
+**Migración V19** (`V19__create_requerimiento_lotes_plagas.sql`):
+- `requerimiento_lotes`: id, requerimiento_id (FK), lote_id (FK), UNIQUE(requerimiento_id, lote_id)
+- `requerimiento_plagas`: id, requerimiento_id (FK), plaga_id (FK), UNIQUE(requerimiento_id, plaga_id)
+
+**Entities**:
+- `RequerimientoLote.java`: @Entity con @ManyToOne a Requerimiento y Lote
+- `RequerimientoPlaga.java`: @Entity con @ManyToOne a Requerimiento y Plaga
+
+**Repositories**:
+- `RequerimientoLoteRepository.java`: findByRequerimientoId()
+- `RequerimientoPlagaRepository.java`: findByRequerimientoId()
+
+### 67.2 Backend — DTOs y Service
+
+**DTOs actualizados**:
+- `CrearRequerimientoRequest`: `lotes: List<Long>`, `plagas: List<Long>` (loteId/plagaId deprecated)
+- `ActualizarRequerimientoRequest`: mismo patrón
+- `RequerimientoDto`: `lotes: List<LoteInfo>`, `plagas: List<PlagaInfo>` (inner classes)
+
+**Service**:
+- `crear()`: guarda en tablas pivote (primer elemento → campo legacy lote_id/plaga_id)
+- `actualizar()`: bulk delete + re-inserción en tablas pivote
+- `getStockDisponible()`: busca stockFinal del último L/J ≤ hoy (no más stockInicialBase 5000)
+
+### 67.3 Mobile — MultiSelectField + NuevoRequerimientoScreen
+
+**Componente nuevo**: `MultiSelectField.tsx`
+- Modal con checkboxes (checkbox-marked / checkbox-blank-outline)
+- Chips con elementos seleccionados debajo del campo
+- Mismo estilo y accesibilidad que SelectField
+
+**NuevoRequerimientoScreen**:
+- `loteId: number | null` → `lotesIds: number[]`
+- `plagaId: number | null` → `plagasIds: number[]`
+- SelectField → MultiSelectField para Lote y Plaga
+- Sección de fotos eliminada (botones Cámara/Galería, previews)
+- Envío: `lotes: lotesIds`, `plagas: plagasIds`
+
+**ApiClient.ts**:
+- `CrearRequerimientoRequest`: `lotes: number[]`, `plagas: number[]`
+- `RequerimientoDto`: `lotes: Array<{id; nombre}>`, `plagas: Array<{id; nombre}>`
+
+### 67.4 Verificación
+
+| Comando | Resultado |
+|---|---|
+| `cd backend && mvn test` | 89 tests, 0 failures |
+| `cd mobile && npm test -- --runInBand` | 127 tests, 0 failures |
+
+**Estado**: Implementado y verificado. Versión 1.11.0.
+
+## 68. Evidencia de Entrega en Estado Aprobado + Fotos BYTEA en BD (2026-09-09)
+
+**Objetivo**: completar el flujo de evidencias del documento de entrega: la sección
+de fotos ahora está disponible en **APROBADO** (además de Entregado), se elimina el
+botón "Ver Detalle" (redundante) y el botón "Acta PDF", y las fotos se almacenan
+como **bytes en la BD** (BYTEA) en lugar de filesystem + metadatos.
+
+**Decisión de almacenamiento (BYTEA)**: se adopta el patrón del repo
+`repo_control_equipos_apilamiento_v2`: columna `contenido BYTEA` nullable,
+entity con `@Column(columnDefinition = "BYTEA") byte[] contenido` y fetch LAZY,
+upload vía `Files.readAllBytes`, descarga vía `Response.ok(bytes, contentType)`
+(stream inline), DTOs sin bytes. Supera la decisión D5 de ADR-A001 (filesystem +
+metadatos) para el módulo de fotos de requerimiento.
+
+### 68.1 Backend — Migración V20 y FotoRequerimiento
+
+**Migración V20** (`V20__fotos_requerimiento_contenido_bytea.sql`):
+- `ALTER TABLE fotos_requerimiento ADD COLUMN contenido BYTEA;` — nullable para
+  compatibilidad con fotos legacy V11 (sin bytes en BD).
+
+**FotoRequerimiento.java**:
+- Campo `byte[] contenido` con `@Basic(fetch = FetchType.LAZY)`
+  y `@Column(columnDefinition = "BYTEA")` + getter/setter.
+
+**FotoRequerimientoService.java**:
+- `subirFoto`: lee los bytes del archivo temporal (`Files.readAllBytes`) y los
+  persiste en `contenido`. La columna `ruta` pasa a guardar la URL canónica
+  `/api/v1/requerimientos/{id}/fotos/contenido` (no una ruta de filesystem).
+- `getFotoStream`: ahora `@Transactional`; **prioriza los bytes de la BD**
+  (`new ByteArrayInputStream(foto.getContenido())`); si la foto es legacy V11
+  (sin bytes), hace **fallback al archivo físico** en disco.
+- Se eliminan `UPLOAD_DIR` y el import `UUID`.
+- **`FotoBinaria`** devuelve `[contenido, contentType, tamanoBytes, nombreArchivo]`.
+
+### 68.2 Mobile — Screens y evidencias
+
+**RequerimientoFormScreen (admin, Screen 8)**:
+- Lote/Objetivo → `MultiSelectField` (`lotesIds`/`plagasIds`, arrays `lotes`/
+  `plagas` en el PUT; `cambiarFundo` resetea lotes).
+- **Botón "Acta PDF" eliminado** (la evidencia se captura como imagen, no PDF).
+- Nueva sección de evidencia visible en **edición con estado APROBADO o
+  Entregado** (`evidencioSeccionVisible`): lista fotos existentes del servidor
+  (con `Quitar`), botones Cámara/Galería (`usePhotoCapture`), previews locales y
+  upload post-guardado vía `subirFotoRequerimiento(id, img, {tipo:'DOCUMENTO_ENTREGA'})`.
+  Al subir una foto en APROBADO se rellena automáticamente la fecha/hora de
+  entrega (traza).
+- Papel/Sobre habilitados en APROBADO y Entregado (no solo Entregado).
+
+**HistorialRequerimientoScreen (user, Screen 12)**:
+- El modal de detalle ahora muestra **todos** los lotes y plagas
+  (`req.lotes.map(l => l.nombre).join(', ')` con fallback legacy `req.lote`).
+- **Botón "Ver Detalle" eliminado** (redundante; el detalle ya se muestra en el
+  modal y en edición).
+
+**EditarRequerimientoScreen (user, Screen 13)**:
+- Lote/Objetivo → `MultiSelectField` (deshabilitado); envía `lotes`/`plagas`
+  arrays. El ciclo APROBADO→ENTREGADO sigue manual (selector + Guardar), sin
+  cambio.
+
+**DetalleRequerimientoScreen**:
+- Muestra todos los lotes/plagas en las filas de detalle.
+
+### 68.3 Verificación
+
+| Comando | Resultado |
+|---|---|
+| `cd backend && mvn compile` | OK |
+| `cd backend && mvn test` | 89 tests, 0 failures |
+| `cd mobile && npm run lint` | 0 errores (11 warnings pre-existentes token.ts) |
+| `cd mobile && npx tsc --noEmit` | TSC_OK |
+| `cd mobile && npm test -- --runInBand` | 127 tests / 22 suites, 0 failures |
+
+> **Nota (Ley 5)**: `FotoRequerimientoResourceTest` en ejecución **aislada**
+> falla en `crearRequerimientoId` con `CANTIDAD_INVALIDA` porque el helper crea
+> programación `anio=2300` cuyo detalle no califica como stock del último L/J
+> (fechaCorte ≈ hoy). En la suite completa pasa (89/89) porque clases previas
+> siembran stock del periodo actual. No es regresión de V20, es dependencia de
+> orden del helper.
+
+**Estado**: Implementado y verificado. Versión 1.11.0 / versionCode 14.

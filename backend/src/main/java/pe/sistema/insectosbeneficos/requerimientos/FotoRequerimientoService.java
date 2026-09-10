@@ -10,7 +10,6 @@ import pe.sistema.insectosbeneficos.seguridad.ApiException;
 import java.io.IOException;
 import java.nio.file.*;
 import java.util.List;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -28,9 +27,6 @@ public class FotoRequerimientoService {
     /** Tamaño máximo de archivo: 5 MB. */
     private static final long MAX_SIZE_BYTES = 5 * 1024 * 1024;
 
-    /** Directorio de uploads relativo al working directory del servidor. */
-    private static final Path UPLOAD_DIR = Paths.get("uploads", "fotos");
-
     /** Máximo de fotos permitidas por requerimiento. */
     private static final int MAX_FOTOS_POR_REQUERIMIENTO = 2;
 
@@ -47,7 +43,7 @@ public class FotoRequerimientoService {
      * @param nombreOriginal  nombre del archivo original
      * @param contentType     MIME type (image/jpeg o image/png)
      * @param tamanoBytes     tamaño del archivo en bytes
-     * @param contenido       Path al archivo temporal subido (FileUpload.uploadedFile())
+     * @param contenidoArchivo Path al archivo temporal subido (FileUpload.uploadedFile())
      * @param metadatos       metadatos adicionales (exif, GPS, etc.)
      * @return DTO de la foto creada
      * @throws ApiException si la validación falla
@@ -55,7 +51,7 @@ public class FotoRequerimientoService {
     @Transactional
     public FotoRequerimientoDto subirFoto(Long requerimientoId, String nombreOriginal,
                                            String contentType, long tamanoBytes,
-                                           Path contenido, String metadatos) {
+                                           Path contenidoArchivo, String metadatos) {
         // Validar que el requerimiento existe
         Requerimiento requerimiento = requerimientoRepository.findByIdOptional(requerimientoId)
                 .orElseThrow(() -> new ApiException(Response.Status.NOT_FOUND,
@@ -81,34 +77,24 @@ public class FotoRequerimientoService {
                     "FORMATO_NO_VALIDO", "Solo se aceptan archivos JPG o PNG");
         }
 
-        // Crear directorio si no existe
+        // Leer bytes del archivo subido (patrón BYTEA, V20)
+        byte[] bytes;
         try {
-            Files.createDirectories(UPLOAD_DIR);
+            bytes = Files.readAllBytes(contenidoArchivo);
         } catch (IOException e) {
             throw new ApiException(Response.Status.INTERNAL_SERVER_ERROR,
-                    "ERROR_DIRECTORIO", "No se pudo crear el directorio de uploads");
+                    "ERROR_LECTURA_ARCHIVO", "No se pudo leer el archivo subido");
         }
 
-        // Guardar archivo con nombre único
-        String extension = "image/png".equalsIgnoreCase(contentType) ? ".png" : ".jpg";
-        String nombreUnico = UUID.randomUUID().toString() + extension;
-        Path rutaArchivo = UPLOAD_DIR.resolve(nombreUnico);
-
-        try {
-            Files.copy(contenido, rutaArchivo, StandardCopyOption.REPLACE_EXISTING);
-        } catch (IOException e) {
-            throw new ApiException(Response.Status.INTERNAL_SERVER_ERROR,
-                    "ERROR_GUARDAR", "No se pudo guardar el archivo");
-        }
-
-        // Guardar metadatos en BD
+        // Guardar metadatos + bytes en BD (patrón BYTEA)
         FotoRequerimiento foto = new FotoRequerimiento();
         foto.setRequerimiento(requerimiento);
-        foto.setRuta(rutaArchivo.toString());
+        foto.setRuta("/api/v1/requerimientos/" + requerimientoId + "/fotos/contenido");
         foto.setNombreArchivo(nombreOriginal);
         foto.setTamanoBytes(tamanoBytes);
         foto.setContentType(contentType);
         foto.setMetadatos(metadatos);
+        foto.setContenido(bytes);
         foto.setCreadoEn(java.time.Instant.now());
         fotoRepository.persist(foto);
 
@@ -155,11 +141,13 @@ public class FotoRequerimientoService {
     }
 
     /**
-     * Retorna un InputStream del archivo de imagen en disco para servirlo
-     * como contenido binario (endpoint GET /imagen).
+     * Retorna el binario de la imagen de una foto (endpoint GET /imagen).
+     * Prioriza los bytes guardados en BD (BYTEA, V20); si la foto es legacy
+     * (V11, sin bytes), hace fallback al archivo físico en disco.
      *
-     * @return tupla [InputStream, contentType, tamanoBytes]
+     * @return tupla [contenido, contentType, tamanoBytes, nombreArchivo]
      */
+    @Transactional
     public FotoBinaria getFotoStream(Long requerimientoId, Long fotoId) {
         FotoRequerimiento foto = fotoRepository.findByIdOptional(fotoId)
                 .orElseThrow(() -> new ApiException(Response.Status.NOT_FOUND,
@@ -170,6 +158,16 @@ public class FotoRequerimientoService {
                     "FOTO_NO_PERTENECE", "La foto no pertenece a este requerimiento");
         }
 
+        // Prioridad 1: bytes en BD (patrón BYTEA V20)
+        if (foto.getContenido() != null && foto.getContenido().length > 0) {
+            return new FotoBinaria(
+                    new java.io.ByteArrayInputStream(foto.getContenido()),
+                    foto.getContentType(),
+                    foto.getTamanoBytes(),
+                    foto.getNombreArchivo());
+        }
+
+        // Prioridad 2 (legacy V11): archivo en disco
         Path ruta = Paths.get(foto.getRuta());
         if (!Files.exists(ruta)) {
             throw new ApiException(Response.Status.NOT_FOUND,

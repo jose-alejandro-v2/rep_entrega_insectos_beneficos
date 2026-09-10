@@ -3,23 +3,26 @@
  * (MOD-18 / RF-158..167). Acceso: admin i+d.
  *
  * Comportamiento por modo:
- *  - Creación (sin `id`): campos base habilitados; Papel/Sobre deshabilitados
- *    (RF-162).
- *  - Edición (con `id`): solo Estado habilitado; Papel/Sobre se habilitan
- *    únicamente si Estado = Entregado (RF-163/164).
+ *  - Creación (sin `id`): campos base habilitados con selección múltiple de
+ *    lotes y plagas (V19); Papel/Sobre deshabilitados (RF-162).
+ *  - Edición (con `id`): solo Estado habilitado; Papel/Sobre se habilitan si
+ *    Estado = Entregado (RF-163/164) o Aprobado (evidencia del documento de
+ *    entrega). La sección de evidencia fotográfica (cámara/galería, JPEG/PNG
+ *    ≤ 5 MB, máx 2) está disponible en edición con estado Aprobado o Entregado
+ *    y se guarda en BD (BYTEA, V20).
  *
  * Validación (RF-165): si Estado = Entregado → Papel + Sobre obligatorios y su
  * suma == cantidad plaga para habilitar Guardar. Al guardar → vuelve a Screen 7.
  *
- * Pendientes (deuda, backend aún no existe):
- *  - POST /requerimientos (crear) no acepta estado/presentaciones en el
- *    contrato actual; se persisten solo al editar (PUT).
- *  - El botón "Acta PDF" de captura de acta (RF-160/161) queda pendiente:
- *    el backend no soporta aún subir la evidencia.
+ * Notas:
+ *  - El botón "Acta PDF" (RF-160/161) fue eliminado: la evidencia se captura
+ *    como imagen (documento de entrega), no como PDF.
+ *  - La transición de estado APROBADO→ENTREGADO se mantiene manual (selector).
  */
 
-import React, {useCallback, useEffect, useState} from 'react';
+import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {
+  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -38,16 +41,23 @@ import DateTimePickerField from '../components/DateTimePickerField';
 import ErrorBoundary from '../components/ErrorBoundary';
 import ErrorState from '../components/ErrorState';
 import LoadingState from '../components/LoadingState';
+import MultiSelectField from '../components/MultiSelectField';
 import SelectField from '../components/SelectField';
+import {usePhotoCapture} from '../hooks/usePhotoCapture';
 import {useRequerimientosCatalogos} from '../hooks/useRequerimientosCatalogos';
 import {useAuth} from '../context/AuthContext';
 import type {RootStackParamList} from '../navigation/types';
 import {
   actualizarRequerimiento,
   crearRequerimiento,
+  eliminarFotoRequerimiento,
   extractErrorMessage,
+  getFotoUrl,
+  listarFotosRequerimiento,
   obtenerRequerimiento,
+  subirFotoRequerimiento,
   type EstadoRequerimiento,
+  type FotoRequerimientoDto,
   type PlagaDto,
 } from '../services/ApiClient';
 import {theme} from '../theme';
@@ -56,11 +66,14 @@ import {
   estadoInfo,
   ESTADOS_ADMIN,
   esEstadoEntregado,
+  horaActual,
   hoyISO,
 } from '../utils/requerimientos';
 
 type Route = RouteProp<RootStackParamList, 'RequerimientoForm'>;
 type Navigation = NativeStackNavigationProp<RootStackParamList>;
+
+const MAX_PHOTOS = 2;
 
 export default function RequerimientoFormScreen() {
   const {user} = useAuth();
@@ -76,9 +89,11 @@ export default function RequerimientoFormScreen() {
   const [fechaInput, setFechaInput] = useState('');
   const [fundoId, setFundoId] = useState<number | null>(null);
   const [loteId, setLoteId] = useState<number | null>(null);
+  const [lotesIds, setLotesIds] = useState<number[]>([]);
   const [especieId, setEspecieId] = useState<number | null>(null);
   const [cantidadTexto, setCantidadTexto] = useState('');
   const [plagaId, setPlagaId] = useState<number | null>(null);
+  const [plagasIds, setPlagasIds] = useState<number[]>([]);
   const [estado, setEstado] = useState<EstadoRequerimiento>('PENDIENTE');
   const [fechaLiberacionInput, setFechaLiberacionInput] = useState('');
   const [horaLiberacion, setHoraLiberacion] = useState('');
@@ -91,6 +106,26 @@ export default function RequerimientoFormScreen() {
   const [saving, setSaving] = useState(false);
   const [avisoActa, setAvisoActa] = useState<string | null>(null);
 
+  const {
+    fotos,
+    fotoError,
+    tomarFoto,
+    seleccionarFoto,
+    quitarFoto,
+  } = usePhotoCapture(MAX_PHOTOS);
+  const [fotosExistentes, setFotosExistentes] = useState<Array<{foto: FotoRequerimientoDto; url: string}>>([]);
+
+  // Rellena fecha/hora de liberación al agregar una foto de entrega (traza).
+  const prevFotoCount = useRef(fotos.length);
+  useEffect(() => {
+    if (fotos.length > prevFotoCount.current) {
+      const now = new Date();
+      setFechaLiberacionInput(now.toISOString());
+      setHoraLiberacion(horaActual());
+    }
+    prevFotoCount.current = fotos.length;
+  }, [fotos.length]);
+
   // Fecha por defecto (creación): hoy.
   useEffect(() => {
     if (modo === 'crear') {
@@ -98,18 +133,22 @@ export default function RequerimientoFormScreen() {
     }
   }, [modo]);
 
+  const cargarLotes = catalogo.cargarLotes;
+
   const cargarRequerimiento = useCallback(async (targetId: number) => {
     setLoading(true);
     setError(null);
 
     // Helper: llenar state desde un DTO del API
-    const fillFromDto = (r: {fecha: string; fundoId: number; loteId: number; especieId: number; cantidad: number; plagaId: number | null; estado: EstadoRequerimiento; fechaLiberacion?: string | null; horaLiberacion?: string | null; observaciones?: string | null; papelConPostura?: number | null; sobreConCascarilla?: number | null}) => {
+    const fillFromDto = (r: {fecha: string; fundoId: number; loteId?: number | null; lotes?: Array<{id: number; nombre: string}>; especieId: number; cantidad: number; plagaId?: number | null; plagas?: Array<{id: number; nombre: string}>; estado: EstadoRequerimiento; fechaLiberacion?: string | null; horaLiberacion?: string | null; observaciones?: string | null; papelConPostura?: number | null; sobreConCascarilla?: number | null}) => {
       setFechaInput(r.fecha);
       setFundoId(r.fundoId);
-      setLoteId(r.loteId);
+      setLoteId(r.loteId ?? null);
+      setLotesIds((r.lotes ?? []).map(l => l.id));
       setEspecieId(r.especieId);
       setCantidadTexto(String(r.cantidad));
-      setPlagaId(r.plagaId);
+      setPlagaId(r.plagaId ?? null);
+      setPlagasIds((r.plagas ?? []).map(p => p.id));
       setEstado(r.estado);
       setFechaLiberacionInput(r.fechaLiberacion ?? '');
       setHoraLiberacion(r.horaLiberacion ?? '');
@@ -121,12 +160,32 @@ export default function RequerimientoFormScreen() {
     try {
       const r = await obtenerRequerimiento(targetId);
       fillFromDto(r);
+      if (r.fundoId != null) {
+        try {
+          await cargarLotes(r.fundoId);
+        } catch {
+          // Silenciar — los lotes se muestran mejor esfuerzo
+        }
+      }
+      // Cargar evidencia fotográfica existente (documento de entrega)
+      try {
+        const fotosServer = await listarFotosRequerimiento(targetId);
+        const fotosConUrl = await Promise.all(
+          fotosServer.map(async f => ({
+            foto: f,
+            url: await getFotoUrl(targetId, f.id),
+          })),
+        );
+        setFotosExistentes(fotosConUrl);
+      } catch {
+        setFotosExistentes([]);
+      }
     } catch (e) {
       setError(extractErrorMessage(e));
     }
 
     setLoading(false);
-  }, []);
+  }, [cargarLotes]);
 
   useEffect(() => {
     if (modo === 'editar' && id != null) {
@@ -138,13 +197,19 @@ export default function RequerimientoFormScreen() {
     const fid = Number(value);
     setFundoId(fid);
     setLoteId(null);
+    setLotesIds([]);
     catalogo.cargarLotes(fid);
   };
 
   // RF-162: en creación Papel/Sobre están deshabilitados; en edición se
-  // habilitan únicamente si el estado es Entregado (RF-163/164).
+  // habilitan si el estado es Entregado (RF-163/164) o Aprobado (evidencia
+  // del documento de entrega listo para captura).
   const papelSobreHabilitados =
-    modo === 'editar' && esEstadoEntregado(estado);
+    modo === 'editar' && (esEstadoEntregado(estado) || estado === 'APROBADO');
+  // La captura de evidencia (cámara/galería) aplica en edición con estado
+  // Aprobado o Entregado (documento de entrega).
+  const evidencioSeccionVisible =
+    modo === 'editar' && (estado === 'APROBADO' || esEstadoEntregado(estado));
   // Otros campos (fecha/fundo/lote/especie/cantidad/objetivo) solo editables en creación.
   const camposBaseHabilitados = modo === 'crear';
   // El campo Estado es siempre editable (creación y edición, RF-163).
@@ -158,10 +223,9 @@ export default function RequerimientoFormScreen() {
   const baseOk =
     !!isoFecha &&
     fundoId != null &&
-    loteId != null &&
+    (loteId != null || lotesIds.length > 0) &&
     especieId != null &&
-    cantidadNum > 0 &&
-    plagaId != null;
+    cantidadNum > 0;
   const presentacionesOk =
     papelNum > 0 && sobreNum > 0 && papelNum + sobreNum === cantidadNum;
   const puedeGuardar =
@@ -171,26 +235,31 @@ export default function RequerimientoFormScreen() {
     setSaving(true);
     setAvisoActa(null);
     try {
+      const lotesEnvio = (lotesIds.length > 0 ? lotesIds : loteId != null ? [loteId] : []);
       if (modo === 'crear') {
         await crearRequerimiento({
           fecha: isoFecha ?? hoyISO(),
           fundoId: fundoId!,
-          loteId: loteId!,
+          loteId: loteId ?? undefined,
+          lotes: lotesEnvio,
           especieId: especieId!,
           etapaFenologicaId: null,
           cantidad: cantidadNum,
-          plagaId,
+          plagaId: plagaId ?? null,
+          plagas: plagasIds,
           observaciones: observaciones.trim() || null,
         });
       } else {
         await actualizarRequerimiento(id!, {
           fecha: isoFecha ?? hoyISO(),
           fundoId: fundoId!,
-          loteId: loteId!,
+          loteId: loteId ?? undefined,
+          lotes: lotesEnvio,
           especieId: especieId!,
           etapaFenologicaId: null,
           cantidad: cantidadNum,
-          plagaId,
+          plagaId: plagaId ?? null,
+          plagas: plagasIds,
           estado,
           papelConPostura: papelNum > 0 ? papelNum : null,
           sobreConCascarilla: sobreNum > 0 ? sobreNum : null,
@@ -199,11 +268,36 @@ export default function RequerimientoFormScreen() {
           observaciones: observaciones.trim() || null,
         });
       }
+      // Subir evidencia fotográfica del documento de entrega (máx 2)
+      for (const foto of fotos) {
+        try {
+          await subirFotoRequerimiento(id!, {
+            uri: foto.uri,
+            type: foto.type,
+            name: foto.fileName,
+          }, JSON.stringify({tipo: 'DOCUMENTO_ENTREGA'}));
+        } catch {
+          // Silenciar — se reintenta en el próximo guardado
+        }
+      }
       navigation.goBack();
     } catch (e) {
       setAvisoActa(extractErrorMessage(e));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const eliminarFotoServidor = async (fotoId: number) => {
+    try {
+      try {
+        await eliminarFotoRequerimiento(id!, fotoId);
+      } catch {
+        // Silenciar — el usuario puede reintentar
+      }
+      setFotosExistentes(prev => prev.filter(item => item.foto.id !== fotoId));
+    } catch {
+      // Silenciar — el usuario puede reintentar
     }
   };
 
@@ -278,13 +372,13 @@ export default function RequerimientoFormScreen() {
                   onSelect={cambiarFundo}
                   disabled={!camposBaseHabilitados || catalogo.fundos.length === 0}
                 />
-                <SelectField
+                <MultiSelectField
                   label="Lote"
                   accessibilityLabel="Lote"
                   optionAccessibilityPrefix="Opción Lote"
-                  value={catalogo.lotes.find(l => l.id === loteId)?.nombre ?? ''}
+                  selectedValues={lotesIds}
                   options={opcionesLote}
-                  onSelect={v => setLoteId(Number(v))}
+                  onSelect={setLotesIds}
                   disabled={!camposBaseHabilitados || fundoId == null || catalogo.lotes.length === 0}
                 />
                 <SelectField
@@ -307,13 +401,13 @@ export default function RequerimientoFormScreen() {
                   maxLength={6}
                   accessibilityLabel="Cantidad plaga"
                 />
-                <SelectField
+                <MultiSelectField
                   label="Objetivo (plaga)"
                   accessibilityLabel="Objetivo"
                   optionAccessibilityPrefix="Opción Plaga"
-                  value={catalogo.plagas.find(p => p.id === plagaId)?.nombre ?? ''}
+                  selectedValues={plagasIds}
                   options={opcionesPlaga}
-                  onSelect={v => setPlagaId(Number(v))}
+                  onSelect={setPlagasIds}
                   disabled={!camposBaseHabilitados || catalogo.plagas.length === 0}
                 />
                 <View style={styles.estadoRow}>
@@ -326,19 +420,6 @@ export default function RequerimientoFormScreen() {
                       options={opcionesEstado}
                       onSelect={v => setEstado(v as EstadoRequerimiento)}
                       disabled={!estadoEditable}
-                    />
-                  </View>
-                  <View style={styles.pdfButton}>
-                    <AppButton
-                      label="PDF"
-                      icon="file-pdf-box"
-                      variant="secondary"
-                      onPress={() =>
-                        setAvisoActa(
-                          'Acta PDF: captura pendiente (el backend aún no soporta subir la evidencia).',
-                        )
-                      }
-                      accessibilityLabel="Adjuntar acta PDF"
                     />
                   </View>
                 </View>
@@ -397,6 +478,73 @@ export default function RequerimientoFormScreen() {
                   </Text>
                 ) : null}
 
+                {evidencioSeccionVisible ? (
+                  <>
+                    <Text style={styles.subtitulo}>
+                      Evidencia del documento de entrega
+                    </Text>
+                    {fotosExistentes.length > 0 && (
+                      <View style={styles.fotoPreviews}>
+                        {fotosExistentes.map(({foto, url}, idx) => (
+                          <View key={String(foto.id)} style={styles.fotoPreview}>
+                            <Image source={{uri: url}} style={styles.fotoImagen} />
+                            <Text style={styles.fotoPreviewText}>Servidor {idx + 1}</Text>
+                            <AppButton
+                              label="Quitar"
+                              icon="delete-outline"
+                              variant="text"
+                              onPress={() => eliminarFotoServidor(foto.id)}
+                              accessibilityLabel={`Quitar foto del servidor ${idx + 1}`}
+                            />
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                    <View style={styles.fotoAcciones}>
+                      <View style={styles.fotoAccion}>
+                        <AppButton
+                          label="Cámara"
+                          icon="camera-outline"
+                          variant="secondary"
+                          disabled={fotos.length + fotosExistentes.length >= MAX_PHOTOS}
+                          onPress={tomarFoto}
+                          accessibilityLabel="Tomar foto del documento de entrega"
+                        />
+                      </View>
+                      <View style={styles.fotoAccion}>
+                        <AppButton
+                          label="Galería"
+                          icon="image-outline"
+                          variant="secondary"
+                          disabled={fotos.length + fotosExistentes.length >= MAX_PHOTOS}
+                          onPress={seleccionarFoto}
+                          accessibilityLabel="Seleccionar foto del documento de entrega de la galería"
+                        />
+                      </View>
+                    </View>
+                    {fotoError ? (
+                      <Text accessibilityRole="alert" style={styles.fotoError}>
+                        {fotoError}
+                      </Text>
+                    ) : null}
+                    <View style={styles.fotoPreviews}>
+                      {fotos.map((foto, idx) => (
+                        <View key={foto.uri} style={styles.fotoPreview}>
+                          <Image source={{uri: foto.uri}} style={styles.fotoImagen} />
+                          <Text style={styles.fotoPreviewText}>Local {idx + 1}</Text>
+                          <AppButton
+                            label="Quitar"
+                            icon="delete-outline"
+                            variant="text"
+                            onPress={() => quitarFoto(idx)}
+                            accessibilityLabel={`Quitar foto del documento ${idx + 1}`}
+                          />
+                        </View>
+                      ))}
+                    </View>
+                  </>
+                ) : null}
+
                 <AppButton
                   label="Guardar"
                   icon="content-save-outline"
@@ -436,10 +584,6 @@ const styles = StyleSheet.create({
   estadoFlex: {
     flex: 1,
   },
-  pdfButton: {
-    marginTop: theme.spacing[5],
-    width: 72,
-  },
   subtitulo: {
     fontFamily: theme.typography.subtitle2.fontFamily,
     fontSize: theme.typography.subtitle2.fontSize,
@@ -447,6 +591,43 @@ const styles = StyleSheet.create({
     color: theme.colors.text.primary,
     marginTop: theme.spacing[2],
     marginBottom: theme.spacing[2],
+  },
+  fotoPreviews: {
+    flexDirection: 'row',
+    gap: theme.spacing[2],
+    flexWrap: 'wrap',
+    marginBottom: theme.spacing[2],
+  },
+  fotoAcciones: {
+    flexDirection: 'row',
+    gap: theme.spacing[2],
+    marginBottom: theme.spacing[2],
+  },
+  fotoAccion: {
+    flex: 1,
+  },
+  fotoError: {
+    color: theme.colors.status.error,
+    fontFamily: theme.typography.body2.fontFamily,
+    fontSize: theme.typography.body2.fontSize,
+    marginBottom: theme.spacing[2],
+  },
+  fotoPreview: {
+    width: 112,
+    borderRadius: theme.radius.sm,
+    backgroundColor: theme.colors.background.neutral,
+    alignItems: 'center',
+    paddingTop: theme.spacing[1],
+  },
+  fotoImagen: {
+    width: 104,
+    height: 76,
+    borderRadius: theme.radius.sm,
+  },
+  fotoPreviewText: {
+    fontFamily: theme.typography.caption.fontFamily,
+    fontSize: 12,
+    color: theme.colors.text.secondary,
   },
   ayuda: {
     fontFamily: theme.typography.caption.fontFamily,

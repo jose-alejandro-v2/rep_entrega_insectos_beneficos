@@ -2,20 +2,19 @@
  * NuevoRequerimientoScreen — Screen 10: Formulario de Nuevo Requerimiento
  * (MOD-18 / RF-173..176 / RN-029..034). Acceso: user sanidad.
  *
- * Campos: Fecha (default hoy), Fundo, Lote (por fundo), Especie, Etapa
- * fenológica, Cantidad (millares), Stock (solo lectura, se actualiza por
- * especie vía `obtenerStockEspecie`), Plaga objetivo, Observaciones y Fotos.
+ * Campos: Fecha (default hoy), Fundo, Lote(s) (multi-select por fundo),
+ * Especie, Etapa fenológica, Cantidad (millares), Stock (solo lectura, se
+ * actualiza por especie vía `obtenerStockEspecie`), Plaga(s) objetivo
+ * (multi-select) y Observaciones.
  *
  * Reglas de stock (RN-031/032): la cantidad no puede superar el stock
  * disponible; si el stock es 0 se bloquea "Stock agotado". Al enviar (si los
- * obligatorios están completos) crea el requerimiento, sube fotos al servidor
- * y vuelve a Screen 9.
+ * obligatorios están completos) crea el requerimiento y vuelve a Screen 9.
  */
 
 import React, {useCallback, useState} from 'react';
 import {
   KeyboardAvoidingView,
-  Image,
   Platform,
   ScrollView,
   StyleSheet,
@@ -32,15 +31,14 @@ import DateTimePickerField from '../components/DateTimePickerField';
 import ErrorBoundary from '../components/ErrorBoundary';
 import ErrorState from '../components/ErrorState';
 import LoadingState from '../components/LoadingState';
+import MultiSelectField from '../components/MultiSelectField';
 import SelectField from '../components/SelectField';
-import {usePhotoCapture} from '../hooks/usePhotoCapture';
 import {useRequerimientosCatalogos} from '../hooks/useRequerimientosCatalogos';
 import type {RootStackParamList} from '../navigation/types';
 import {
   crearRequerimiento,
   extractErrorMessage,
   obtenerStockEspecie,
-  subirFotoRequerimiento,
 } from '../services/ApiClient';
 import {theme} from '../theme';
 import {
@@ -53,28 +51,19 @@ import {
 
 type Navigation = NativeStackNavigationProp<RootStackParamList>;
 
-const MAX_PHOTOS = 2;
-
 export default function NuevoRequerimientoScreen() {
   const navigation = useNavigation<Navigation>();
   const insets = useSafeAreaInsets();
 
   const catalogo = useRequerimientosCatalogos();
-  const {
-    fotos,
-    fotoError,
-    tomarFoto,
-    seleccionarFoto,
-    quitarFoto,
-  } = usePhotoCapture(MAX_PHOTOS);
 
   const [fechaInput, setFechaInput] = useState(hoyISO());
   const [fundoId, setFundoId] = useState<number | null>(null);
-  const [loteId, setLoteId] = useState<number | null>(null);
+  const [lotesIds, setLotesIds] = useState<number[]>([]);
   const [especieId, setEspecieId] = useState<number | null>(null);
   const [etapaId, setEtapaId] = useState<number | null>(null);
   const [cantidadTexto, setCantidadTexto] = useState('');
-  const [plagaId, setPlagaId] = useState<number | null>(null);
+  const [plagasIds, setPlagasIds] = useState<number[]>([]);
   const [observaciones, setObservaciones] = useState('');
 
   const [stock, setStock] = useState<number | null>(null);
@@ -84,7 +73,7 @@ export default function NuevoRequerimientoScreen() {
   const cambiarFundo = (value: number | string) => {
     const fid = Number(value);
     setFundoId(fid);
-    setLoteId(null);
+    setLotesIds([]);
     catalogo.cargarLotes(fid);
   };
 
@@ -109,11 +98,11 @@ export default function NuevoRequerimientoScreen() {
   const basico: FormularioRequerimientoBasico = {
     fecha: isoFecha ?? '',
     fundoId,
-    loteId,
+    lotesIds,
     especieId,
     etapaFenologicaId: etapaId,
     cantidad: cantidadNum,
-    plagaId,
+    plagasIds,
     observaciones,
   };
   const faltantes = camposObligatoriosFaltantes(basico);
@@ -124,23 +113,16 @@ export default function NuevoRequerimientoScreen() {
     setSaving(true);
     setErrorEnvio(null);
     try {
-      const nuevo = await crearRequerimiento({
+      await crearRequerimiento({
         fecha: isoFecha ?? hoyISO(),
         fundoId: fundoId!,
-        loteId: loteId!,
+        lotes: lotesIds,
         especieId: especieId!,
         etapaFenologicaId: etapaId,
         cantidad: cantidadNum,
-        plagaId,
+        plagas: plagasIds,
         observaciones: observaciones.trim() || null,
       });
-      for (const foto of fotos) {
-        await subirFotoRequerimiento(nuevo.id, {
-          uri: foto.uri,
-          type: foto.type,
-          name: foto.fileName,
-        }, JSON.stringify({tipo: 'EVIDENCIA'}));
-      }
       navigation.goBack();
     } catch (e) {
       setErrorEnvio(extractErrorMessage(e));
@@ -212,12 +194,12 @@ export default function NuevoRequerimientoScreen() {
                   onSelect={cambiarFundo}
                   disabled={catalogo.fundos.length === 0}
                 />
-                <SelectField
+                <MultiSelectField
                   label="Lote"
                   optionAccessibilityPrefix="Opción Lote"
-                  value={catalogo.lotes.find(l => l.id === loteId)?.nombre ?? ''}
+                  selectedValues={lotesIds}
                   options={opcionesLote}
-                  onSelect={v => setLoteId(Number(v))}
+                  onSelect={setLotesIds}
                   disabled={fundoId == null || catalogo.lotes.length === 0}
                 />
                 <SelectField
@@ -258,12 +240,12 @@ export default function NuevoRequerimientoScreen() {
                     <Text style={styles.stockError}>{stockError}</Text>
                   ) : null}
                 </View>
-                <SelectField
+                <MultiSelectField
                   label="Plaga objetivo"
                   optionAccessibilityPrefix="Opción Plaga"
-                  value={catalogo.plagas.find(p => p.id === plagaId)?.nombre ?? ''}
+                  selectedValues={plagasIds}
                   options={opcionesPlaga}
-                  onSelect={v => setPlagaId(Number(v))}
+                  onSelect={setPlagasIds}
                   disabled={catalogo.plagas.length === 0}
                 />
                 <AppInput
@@ -275,36 +257,6 @@ export default function NuevoRequerimientoScreen() {
                   textAlignVertical="top"
                   accessibilityLabel="Observaciones"
                 />
-
-                <Text style={styles.fotoTitulo}>Fotos (evidencia)</Text>
-                <View style={styles.fotoRow}>
-                  <AppButton
-                    label="Cámara"
-                    icon="camera-outline"
-                    variant="secondary"
-                    disabled={fotos.length >= MAX_PHOTOS}
-                    onPress={tomarFoto}
-                    accessibilityLabel="Tomar foto"
-                  />
-                  <AppButton
-                    label="Galería"
-                    icon="image-outline"
-                    variant="secondary"
-                    disabled={fotos.length >= MAX_PHOTOS}
-                    onPress={seleccionarFoto}
-                    accessibilityLabel="Seleccionar foto de la galería"
-                  />
-                </View>
-                {fotoError ? <Text accessibilityRole="alert" style={styles.fotoError}>{fotoError}</Text> : null}
-                <View style={styles.fotoPreviews}>
-                  {fotos.map((foto, idx) => (
-                    <View key={foto.uri} style={styles.fotoPreview}>
-                      <Image source={{uri: foto.uri}} style={styles.fotoImagen} />
-                      <Text style={styles.fotoPreviewText}>Foto {idx + 1}</Text>
-                      <AppButton label="Quitar" icon="delete-outline" variant="text" onPress={() => quitarFoto(idx)} accessibilityLabel={`Quitar foto ${idx + 1}`} />
-                    </View>
-                  ))}
-                </View>
 
                 {faltantes.length > 0 ? (
                   <Text style={styles.ayuda}>
@@ -371,46 +323,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: theme.colors.status.error,
     marginTop: theme.spacing[1],
-  },
-  fotoTitulo: {
-    fontFamily: theme.typography.subtitle2.fontFamily,
-    fontSize: theme.typography.subtitle2.fontSize,
-    lineHeight: theme.typography.subtitle2.lineHeight,
-    color: theme.colors.text.primary,
-    marginTop: theme.spacing[2],
-    marginBottom: theme.spacing[2],
-  },
-  fotoRow: {
-    marginBottom: theme.spacing[2],
-  },
-  fotoPreviews: {
-    flexDirection: 'row',
-    gap: theme.spacing[2],
-    flexWrap: 'wrap',
-    marginBottom: theme.spacing[2],
-  },
-  fotoError: {
-    color: theme.colors.status.error,
-    fontFamily: theme.typography.body2.fontFamily,
-    fontSize: theme.typography.body2.fontSize,
-    marginBottom: theme.spacing[2],
-  },
-  fotoPreview: {
-    width: 112,
-    borderRadius: theme.radius.sm,
-    backgroundColor: theme.colors.background.neutral,
-    alignItems: 'center',
-    paddingTop: theme.spacing[1],
-  },
-  fotoImagen: {
-    width: 104,
-    height: 76,
-    borderRadius: theme.radius.sm,
-  },
-  fotoPreviewText: {
-    fontFamily: theme.typography.caption.fontFamily,
-    fontSize: 12,
-    color: theme.colors.text.secondary,
   },
   ayuda: {
     fontFamily: theme.typography.caption.fontFamily,

@@ -68,10 +68,10 @@ AGENTS.md
 README.md
 docker-compose.yml              (proyecto `repo_registro_insectos_beneficos`: postgres:16 + backend + nginx)
 nginx/nginx.conf                (proxy 8080 → backend:6101)
-backend/                     (API Quarkus v2 — auth/usuarios bajo /api/v1, Flyway V1-V17, Dockerfile multi-stage,
-                              32 tests; imagen `repo_registro_insectos_beneficos-backend`, TZ America/Lima)
+backend/                     (API Quarkus v2 — auth/usuarios bajo /api/v1, Flyway V1-V20, Dockerfile multi-stage,
+                              89 tests; imagen `repo_registro_insectos_beneficos-backend`, TZ America/Lima)
 mobile/                      (React Native CLI 0.86 / React 19.2.3 — auth v2: login 3 pasos,
-                              ApiClient.ts + keychain, ServerCheck/Settings, 27 tests)
+                              ApiClient.ts + keychain, ServerCheck/Settings, 127 tests)
 web/                         (React + Vite — pendiente de scaffold)
 docs_implementacion/
 ├── _perfiles/
@@ -94,9 +94,10 @@ docs_implementacion/
 ```
 
 `backend/` es la API Quarkus v2 (auth/usuarios bajo `/api/v1`, login 3 pasos rol→usuario→DNI,
-tabla `roles` + `usuarios.rol_id` V3, Super Admin id=1 inmune, 32 tests con Testcontainers);
+tabla `roles` + `usuarios.rol_id` V3, Super Admin id=1 inmune, 32 tests con Testcontainers,
+multi-select lotes/plagas V19 + fotos BYTEA en BD V20, 89 tests con Testcontainers);
 `mobile/` es la app RN CLI v2 (`src/services/ApiClient.ts` → `/api/v1`, token y URL en SecureStore
-vía keychain, ServerCheck/Settings de URL runtime, login 3 pasos, 27 tests).
+vía keychain, ServerCheck/Settings de URL runtime, login 3 pasos, 127 tests).
 **HITO-001 = Infraestructura base** (cerrado) y **HITO-002 = Auth v2** (ver §7).
 El backend corre dockerizado (compose proyecto `repo_registro_insectos_beneficos`): postgres:16 +
 imagen `repo_registro_insectos_beneficos-backend` (puerto 6101) + nginx (proxy 8080 → 6101),
@@ -213,10 +214,20 @@ y reportar al Orchestrator; no "arreglarlo" en silencio.
   "Nuevo" la tabla del mes se muestra inmediatamente habilitada (sin esperar a seleccionar especie;
   la especie solo habilita "Enviar stock" y ya no regenera la tabla). Zona horaria del contenedor
   `America/Lima` (ENV TZ + `-Duser.timezone`). Versión **1.10.0** / versionCode 13.
+- **v1.11.0 (2026-09-09) = Multi-select Lotes/Plagas + Stock último L/J + Evidencia Aprobado + Fotos BYTEA**:
+  Selección múltiple de lotes y plagas con tablas pivote (V19 `requerimiento_lotes`, `requerimiento_plagas`).
+  Componente `MultiSelectField` con checkboxes y chips. Stock disponible del último L o J (no mensual 5000).
+  Fotos deshabilitadas al crear requerimiento (solo en recepción/despacho). Evidencia de entrega
+  (cámara/galería) disponible en edición con estado **APROBADO** o **Entregado**; botones "Ver Detalle"
+  (historial) y "Acta PDF" (formulario admin) eliminados; el detalle muestra todos los lotes/plagas.
+  **Fotos en BYTEA en BD** (migración V20 `contenido` nullable, patrón
+  `repo_control_equipos_apilamiento_v2`; fallback a disco para fotos legacy V11).
+  Backend: 89 tests BE · Mobile: 127 tests MO. Antes de este hito: su primer commit documentaba solo
+  multi-select (V19) como entrada v1.11.0; esta entrada unifica el alcance completo de la versión.
 - Web (React/Vite) y CI/CD siguen pendientes (próxima fase).
-- **Endpoint backend para servir fotos estáticas** sigue pendiente (requerido para que `<Image>` muestre
-  fotos reales; gap documentado en HITO-010 §40.8 / HITO-011 §41.8).
-- La validación end-to-end desde mobile contra el backend real y actas PDF siguen pendientes (próxima fase).
+- **Endpoint backend para servir fotos** ya está cubierto por el flujo BYTEA
+  (`/api/v1/requerimientos/{id}/fotos/contenido`, Ordenable en Response). La validación
+  end-to-end desde mobile contra el backend real y actas PDF siguen pendientes (próxima fase).
 - Los hitos se cierran con **auditoría integral PASS + verificación + `05_hito_NNN.md` + commit** coherente.
 - `versionHistory.js` es la fuente del historial visible al usuario (mobile existente); web la adoptará.
 
