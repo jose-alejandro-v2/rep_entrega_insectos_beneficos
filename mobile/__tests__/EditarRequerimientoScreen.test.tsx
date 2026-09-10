@@ -180,7 +180,7 @@ describe('EditarRequerimientoScreen — fotos del servidor (HITO-011)', () => {
     mockGoBack.mockClear();
   });
 
-  test('carga y muestra fotos existentes del servidor', async () => {
+  test('carga y muestra fotos existentes del servidor bajo Foto de Entrega', async () => {
     requerimientoActual = requerimientoBase({
       updatedAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
     });
@@ -189,33 +189,18 @@ describe('EditarRequerimientoScreen — fotos del servidor (HITO-011)', () => {
       await flushPromises();
     });
 
-    const servidorLabels = tree.root.findAll(
+    // Verificar que la etiqueta "Foto de Entrega" está presente
+    const entregaLabels = tree.root.findAll(
       (node: any) =>
-        node.props.accessibilityLabel === 'Quitar foto del servidor 1',
+        typeof node.props.children === 'string' && node.props.children === 'Foto de Entrega',
     );
-    expect(servidorLabels.length).toBeGreaterThanOrEqual(1);
-  });
+    expect(entregaLabels.length).toBeGreaterThanOrEqual(1);
 
-  test('elimina foto del servidor al pulsar Quitar', async () => {
-    requerimientoActual = requerimientoBase({
-      updatedAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
-    });
-    const tree = await renderEdicion();
-    await act(async () => {
-      await flushPromises();
-    });
-
-    await act(async () => {
-      const btns = tree.root.findAll(
-        (node: any) =>
-          node.props.accessibilityLabel === 'Quitar foto del servidor 1',
-      );
-      btns[0].props.onPress();
-    });
-    await act(async () => {
-      await flushPromises();
-    });
-
-    expect(api.delete).toHaveBeenCalledWith('/requerimientos/4/fotos/10');
+    // Verificar que la foto se muestra
+    const fotoImages = tree.root.findAll(
+      (node: any) =>
+        node.props.source && typeof node.props.source.uri === 'string' && node.props.source.uri.includes('/fotos/'),
+    );
+    expect(fotoImages.length).toBeGreaterThanOrEqual(1);
   });
 });

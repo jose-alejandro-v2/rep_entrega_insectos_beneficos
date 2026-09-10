@@ -4,14 +4,14 @@
  *
  * Comportamiento por estado:
  *  - APROBADO: todos los campos deshabilitados, sin botón Guardar (solo lectura).
- *  - ENTREGADO: formulario de liberación por lote:
- *    · Select de lote (único, solo lotes no liberados).
+ *  - ENTREGADO: formulario de liberación por lote (solo lectura):
+ *    · Select de lote (único, solo lotes no liberados, deshabilitado).
  *    · Cantidad muestra la cantidad entregada (no editable).
- *    · Papel/Sobre habilitados.
- *    · Select de plaga (multi, habilitado).
- *    · Fecha/Hora habilitados con defaults del sistema.
- *    · Cámara/Galería habilitados (hasta 2 fotos).
- *    · Guardar → llama crearLiberacion + sube fotos → vuelve a Screen 12.
+ *    · Papel/Sobre deshabilitados (valores del requerimiento padre).
+ *    · Plaga multi-select (deshabilitada, valor del requerimiento).
+ *    · Fecha/Hora de liberación (defaults del sistema, deshabilitados).
+ *    · Fotos: "Foto de Entrega" (izq) + "Foto de Liberación" (der), sin cámara/galería.
+ *    · Guardar → llama crearLiberacion → vuelve a Screen 12.
  *
  * Notas:
  *  - Botón "Acta PDF" eliminado (evidencia = imagen).
@@ -46,13 +46,11 @@ import {useRequerimientosCatalogos} from '../hooks/useRequerimientosCatalogos';
 import type {RootStackParamList} from '../navigation/types';
 import {
   crearLiberacion,
-  eliminarFotoRequerimiento,
   extractErrorMessage,
   getFotoUrl,
   listarFotosRequerimiento,
   listarLiberaciones,
   obtenerRequerimiento,
-  subirFotoRequerimiento,
   type FotoRequerimientoDto,
 } from '../services/ApiClient';
 import {theme} from '../theme';
@@ -79,10 +77,6 @@ export default function EditarRequerimientoScreen() {
   const catalogo = useRequerimientosCatalogos();
   const {
     fotos,
-    fotoError,
-    tomarFoto,
-    seleccionarFoto,
-    quitarFoto,
   } = usePhotoCapture(MAX_PHOTOS);
 
   const [fechaInput, setFechaInput] = useState('');
@@ -104,6 +98,7 @@ export default function EditarRequerimientoScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [alerta30, setAlerta30] = useState(false);
 
   // Derivar modo desde el estado
@@ -132,6 +127,14 @@ export default function EditarRequerimientoScreen() {
       setObservaciones(r.observaciones ?? '');
       setEstado(r.estado);
       setAlerta30(requiereAlertaLiberacion(r));
+
+      // V21: cargar papel/sobre del requerimiento (valores del admin al marcar ENTREGADO)
+      if (r.papelConPostura != null) {
+        setPapelTexto(String(r.papelConPostura));
+      }
+      if (r.sobreConCascarilla != null) {
+        setSobreTexto(String(r.sobreConCascarilla));
+      }
 
       // V21: si ENTREGADO, pre-llenar fecha/hora de liberación con defaults del sistema
       if (r.estado === 'ENTREGADO') {
@@ -181,26 +184,13 @@ export default function EditarRequerimientoScreen() {
     cargarRequerimiento();
   }, [cargarRequerimiento]);
 
-  const eliminarFotoServidor = async (fotoId: number) => {
-    try {
-      try {
-        await eliminarFotoRequerimiento(id, fotoId);
-      } catch {
-        // Silenciar — el usuario puede reintentar
-      }
-      setFotosExistentes(prev => prev.filter(item => item.foto.id !== fotoId));
-    } catch {
-      // Silenciar — el usuario puede reintentar
-    }
-  };
-
   // V21: guardar liberación (solo ENTREGADO)
   const guardarLiberacion = async () => {
     if (!esModoLiberacion || loteLiberacionId == null) {
       return;
     }
     setSaving(true);
-    setError(null);
+    setSaveError(null);
     try {
       const fundoParaLiberacion = fundoId ?? 0;
       await crearLiberacion(id, {
@@ -212,21 +202,9 @@ export default function EditarRequerimientoScreen() {
         horaLiberacion: horaLiberacion || horaActual(),
         observaciones: observaciones.trim() || undefined,
       });
-      // Subir fotos nuevas al servidor
-      for (const foto of fotos) {
-        try {
-          await subirFotoRequerimiento(id, {
-            uri: foto.uri,
-            type: foto.type,
-            name: foto.fileName,
-          }, JSON.stringify({tipo: 'LIBERACION'}));
-        } catch {
-          // Silenciar — la foto se subirá en el próximo sync
-        }
-      }
       navigation.goBack();
     } catch (e) {
-      setError(extractErrorMessage(e));
+      setSaveError(extractErrorMessage(e));
     } finally {
       setSaving(false);
     }
@@ -322,7 +300,7 @@ export default function EditarRequerimientoScreen() {
                         value={lotesNoLiberados.find(l => l.id === loteLiberacionId)?.nombre ?? ''}
                         options={opcionesLote}
                         onSelect={v => setLoteLiberacionId(Number(v))}
-                        disabled={false}
+                        disabled
                       />
                     )}
 
@@ -332,7 +310,7 @@ export default function EditarRequerimientoScreen() {
                       value={papelTexto}
                       onChangeText={setPapelTexto}
                       keyboardType="number-pad"
-                      editable={esModoLiberacion}
+                      editable={false}
                       maxLength={6}
                       accessibilityLabel="Papel con postura"
                     />
@@ -341,7 +319,7 @@ export default function EditarRequerimientoScreen() {
                       value={sobreTexto}
                       onChangeText={setSobreTexto}
                       keyboardType="number-pad"
-                      editable={esModoLiberacion}
+                      editable={false}
                       maxLength={6}
                       accessibilityLabel="Sobre con cascarilla"
                     />
@@ -354,7 +332,7 @@ export default function EditarRequerimientoScreen() {
                       selectedValues={plagasIds}
                       options={opcionesPlaga}
                       onSelect={setPlagasIds}
-                      disabled={!esModoLiberacion}
+                      disabled
                     />
 
                     <DateTimePickerField
@@ -363,7 +341,7 @@ export default function EditarRequerimientoScreen() {
                       mode="date"
                       onChange={setFechaLiberacionInput}
                       onClear={() => setFechaLiberacionInput('')}
-                      editable={esModoLiberacion}
+                      editable={false}
                       accessibilityLabel="Fecha de liberación"
                     />
                     <DateTimePickerField
@@ -372,73 +350,59 @@ export default function EditarRequerimientoScreen() {
                       mode="time"
                       onChange={setHoraLiberacion}
                       onClear={() => setHoraLiberacion('')}
-                      editable={esModoLiberacion}
+                      editable={false}
                       accessibilityLabel="Hora de liberación"
                     />
 
-                    <Text style={styles.fotoTitulo}>Foto de liberación</Text>
-                    {fotosExistentes.length > 0 && (
-                      <View style={styles.fotoPreviews}>
-                        {fotosExistentes.map(({foto, url}, idx) => (
-                          <View key={String(foto.id)} style={styles.fotoPreview}>
-                            <Image
-                              source={{uri: url}}
-                              style={styles.fotoImagen}
-                            />
-                            <Text style={styles.fotoPreviewText}>Servidor {idx + 1}</Text>
-                            <AppButton
-                              label="Quitar"
-                              icon="delete-outline"
-                              variant="text"
-                              onPress={() => eliminarFotoServidor(foto.id)}
-                              accessibilityLabel={`Quitar foto del servidor ${idx + 1}`}
-                            />
+                    <View style={styles.fotoDosColumnas}>
+                      <View style={styles.fotoColumna}>
+                        <Text style={styles.fotoTitulo}>Foto de Entrega</Text>
+                        {fotosExistentes.length > 0 ? (
+                          <View style={styles.fotoPreviews}>
+                            {fotosExistentes.map(({foto, url}, idx) => (
+                              <View key={String(foto.id)} style={styles.fotoPreview}>
+                                <Image
+                                  source={{uri: url}}
+                                  style={styles.fotoImagen}
+                                />
+                                <Text style={styles.fotoPreviewText}>Entrega {idx + 1}</Text>
+                              </View>
+                            ))}
                           </View>
-                        ))}
+                        ) : (
+                          <Text style={styles.ayuda}>Sin foto de entrega</Text>
+                        )}
                       </View>
-                    )}
-                    <View style={styles.fotoAcciones}>
-                      <View style={styles.fotoAccion}>
-                        <AppButton
-                          label="Cámara"
-                          icon="camera-outline"
-                          variant="secondary"
-                          disabled={fotos.length + fotosExistentes.length >= MAX_PHOTOS}
-                          onPress={tomarFoto}
-                          accessibilityLabel="Tomar foto de liberación"
-                        />
-                      </View>
-                      <View style={styles.fotoAccion}>
-                        <AppButton
-                          label="Galería"
-                          icon="image-outline"
-                          variant="secondary"
-                          disabled={fotos.length + fotosExistentes.length >= MAX_PHOTOS}
-                          onPress={seleccionarFoto}
-                          accessibilityLabel="Seleccionar foto de liberación de la galería"
-                        />
+                      <View style={styles.fotoColumna}>
+                        <Text style={styles.fotoTitulo}>Foto de Liberación</Text>
+                        {fotos.length > 0 ? (
+                          <View style={styles.fotoPreviews}>
+                            {fotos.map((foto, idx) => (
+                              <View key={foto.uri} style={styles.fotoPreview}>
+                                <Image source={{uri: foto.uri}} style={styles.fotoImagen} />
+                                <Text style={styles.fotoPreviewText}>Liberación {idx + 1}</Text>
+                              </View>
+                            ))}
+                          </View>
+                        ) : (
+                          <Text style={styles.ayuda}>Sin foto de liberación</Text>
+                        )}
                       </View>
                     </View>
-                    {fotoError ? (
-                      <Text accessibilityRole="alert" style={styles.fotoError}>
-                        {fotoError}
-                      </Text>
+
+                    {saveError ? (
+                      <View style={styles.saveErrorContainer}>
+                        <Text accessibilityRole="alert" style={styles.saveErrorText}>
+                          {saveError}
+                        </Text>
+                        <AppButton
+                          label="Cerrar"
+                          variant="text"
+                          onPress={() => setSaveError(null)}
+                          accessibilityLabel="Cerrar error"
+                        />
+                      </View>
                     ) : null}
-                    <View style={styles.fotoPreviews}>
-                      {fotos.map((foto, idx) => (
-                        <View key={foto.uri} style={styles.fotoPreview}>
-                          <Image source={{uri: foto.uri}} style={styles.fotoImagen} />
-                          <Text style={styles.fotoPreviewText}>Local {idx + 1}</Text>
-                          <AppButton
-                            label="Quitar"
-                            icon="delete-outline"
-                            variant="text"
-                            onPress={() => quitarFoto(idx)}
-                            accessibilityLabel={`Quitar foto de liberación ${idx + 1}`}
-                          />
-                        </View>
-                      ))}
-                    </View>
 
                     <AppButton
                       label="Guardar liberación"
@@ -535,6 +499,14 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     marginBottom: theme.spacing[2],
   },
+  fotoDosColumnas: {
+    flexDirection: 'row',
+    gap: theme.spacing[3],
+    marginBottom: theme.spacing[2],
+  },
+  fotoColumna: {
+    flex: 1,
+  },
   fotoAcciones: {
     flexDirection: 'row',
     gap: theme.spacing[2],
@@ -565,5 +537,20 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.caption.fontFamily,
     fontSize: 12,
     color: theme.colors.text.secondary,
+  },
+  saveErrorContainer: {
+    backgroundColor: theme.colors.status.errorBackground,
+    borderRadius: theme.radius.sm,
+    padding: theme.spacing[3],
+    marginBottom: theme.spacing[3],
+    borderWidth: 1,
+    borderColor: theme.colors.status.error,
+  },
+  saveErrorText: {
+    fontFamily: theme.typography.body2.fontFamily,
+    fontSize: theme.typography.body2.fontSize,
+    lineHeight: theme.typography.body2.lineHeight,
+    color: theme.colors.status.error,
+    marginBottom: theme.spacing[2],
   },
 });
