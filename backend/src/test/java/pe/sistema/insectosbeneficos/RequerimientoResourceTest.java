@@ -3,10 +3,15 @@ package pe.sistema.insectosbeneficos;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
+import io.restassured.response.Response;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.DayOfWeek;
+import java.time.LocalDate;
+import java.time.temporal.IsoFields;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static io.restassured.RestAssured.given;
@@ -41,14 +46,77 @@ public class RequerimientoResourceTest {
     // Helpers
     // ------------------------------------------------------------------
 
-    /** Crea una programación base para la especie (stock 5000) si no existe ya. */
+    /** Calcula fecha de corte (mismo algoritmo que el backend). */
+    private LocalDate calcularFechaCorte() {
+        LocalDate hoy = LocalDate.now();
+        DayOfWeek dow = hoy.getDayOfWeek();
+        int diasDesdeLunes = dow.getValue() - 1;
+        if (dow.getValue() <= 3) {
+            return hoy.minusDays(diasDesdeLunes);
+        } else {
+            int diasDesdeJueves = (dow.getValue() - 4 + 7) % 7;
+            return hoy.minusDays(diasDesdeJueves);
+        }
+    }
+
+    /**
+     * Crea programación del mes actual + cumplimiento con totalReal=5000
+     * en la fecha de corte (L o J) para que getStockDisponible retorne 5000.
+     */
     private void asegurarStockEspecie() {
-        given()
+        LocalDate hoy = LocalDate.now();
+        int anio = hoy.getYear();
+        int mes = hoy.getMonthValue();
+        LocalDate fechaCorte = calcularFechaCorte();
+
+        // 1. Crear programación del mes actual (si ya existe, 409 → ignorar)
+        String progBody = "{\"anio\":" + anio + ",\"mes\":" + mes + ",\"especieId\":" + ESPECIE_ID + "}";
+        long programacionId;
+        Response postResp = given()
           .auth().oauth2(TestSupport.seedToken())
           .contentType(ContentType.JSON)
-          .body(Map.of("anio", 2200, "mes", 1, "especieId", ESPECIE_ID))
+          .body(progBody)
           .when().post("/api/v1/programaciones")
-          .then().statusCode(anyOf(is(201), is(409)));
+          .then().extract().response();
+
+        int statusCode = postResp.getStatusCode();
+        if (statusCode == 409) {
+            // Ya existe — obtener el id de la programación existente
+            programacionId = given()
+              .auth().oauth2(TestSupport.seedToken())
+              .when().get("/api/v1/programaciones?anio=" + anio + "&mes=" + mes)
+              .then().extract().jsonPath().getLong("[0].id");
+        } else {
+            programacionId = postResp.jsonPath().getLong("id");
+        }
+
+        // 2. Obtener detalles de la programación
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> detalles = (List<Map<String, Object>>) (List<?>) given()
+          .auth().oauth2(TestSupport.seedToken())
+          .when().get("/api/v1/programaciones/" + programacionId)
+          .then().extract().jsonPath().getList("detalles");
+
+        // 3. Buscar detalle con fecha = fechaCorte
+        for (Map<String, Object> d : detalles) {
+            if (fechaCorte.toString().equals(d.get("fecha"))) {
+                long detalleId = ((Number) d.get("id")).longValue();
+                int semana = ((Number) d.get("semana")).intValue();
+                // 4. Crear/upsert cumplimiento con totalReal=5000
+                String cumpleBody = "{\"programacionDetalleId\":" + detalleId
+                    + ",\"semana\":" + semana
+                    + ",\"fecha\":\"" + fechaCorte + "\""
+                    + ",\"papelReal\":2500,\"sobreReal\":2500}";
+                given()
+                  .auth().oauth2(TestSupport.seedToken())
+                  .contentType(ContentType.JSON)
+                  .body(cumpleBody)
+                  .when().put("/api/v1/programaciones/" + programacionId + "/cumplimiento")
+                  .then().statusCode(anyOf(is(200), is(201)));
+                return;
+            }
+        }
+        // Si no hay detalle para fechaCorte (mes sin L/J en esa fecha), no-op.
     }
 
     private Map<String, Object> crearBody(BigDecimal cantidad) {

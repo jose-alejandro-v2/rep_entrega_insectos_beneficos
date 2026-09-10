@@ -12,6 +12,7 @@ import pe.sistema.insectosbeneficos.catalogos.Lote;
 import pe.sistema.insectosbeneficos.catalogos.LoteRepository;
 import pe.sistema.insectosbeneficos.catalogos.Plaga;
 import pe.sistema.insectosbeneficos.catalogos.PlagaRepository;
+import pe.sistema.insectosbeneficos.programacion.CumplimientoProgramacionRepository;
 import pe.sistema.insectosbeneficos.programacion.DetalleProgramacionRepository;
 import pe.sistema.insectosbeneficos.programacion.Especie;
 import pe.sistema.insectosbeneficos.programacion.EspecieRepository;
@@ -54,6 +55,9 @@ public class RequerimientoService {
 
     @Inject
     DetalleProgramacionRepository detalleProgramacionRepository;
+
+    @Inject
+    CumplimientoProgramacionRepository cumplimientoProgramacionRepository;
 
     @Inject
     EspecieRepository especieRepository;
@@ -101,21 +105,20 @@ public class RequerimientoService {
 
     /**
      * Stock disponible en tiempo real de una especie (Screen 10 del mobile).
-     * Calcula la fecha de corte según el día actual (último Lunes o Jueves)
-     * y busca el stockFinal del detalle de programación más reciente con
-     * fecha <= fechaCorte para la especie dada.
+     * Consulta {@code cumplimiento_programacion.total_real} del último Lunes o Jueves
+     * según el día actual (V21 stock fix).
      *
      * Lógica de fechaCorte:
      *   - Lunes/Martes/Miércoles → último Lunes
      *   - Jueves/Viernes/Sábado/Domingo → último Jueves
      *
-     * Si no hay detalle de programación para la especie → 0.
+     * Si no hay cumplimiento para la especie en esa fecha → 0.
      */
     public BigDecimal getStockDisponible(Long especiaId) {
         LocalDate fechaCorte = calcularFechaCorteStock();
-        return detalleProgramacionRepository
-                .findStockFinalByEspecieAndFechaCorte(especiaId, fechaCorte)
-                .map(d -> BigDecimal.valueOf(d.getStockFinal()))
+        return cumplimientoProgramacionRepository
+                .findByEspecieAndFecha(especiaId, fechaCorte)
+                .map(cp -> BigDecimal.valueOf(cp.getTotalReal()))
                 .orElse(BigDecimal.ZERO);
     }
 

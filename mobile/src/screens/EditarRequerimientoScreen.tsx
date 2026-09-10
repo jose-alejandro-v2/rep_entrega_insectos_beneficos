@@ -2,17 +2,23 @@
  * EditarRequerimientoScreen — Screen 13: Edición de Requerimiento (user)
  * (MOD-18 / RF-182..185 / RN-035..036). Acceso: user sanidad.
  *
- * Mismos campos de Screen 10 pre-cargados (base solo lectura), más:
- *  - Fecha y Hora de liberación: se auto-completan con los metadatos del
- *    sistema al tomar la foto (RN-036).
- *  - Botón Foto (cámara/galería, hasta 2); carga fotos existentes del
- *    servidor, sube nuevas fotos y permite eliminar fotos del servidor.
- *  - Alerta permanente de 30 h (RN-035): si desde que el estado pasó a
- *    RECIBIDO transcurrió >30 h sin foto de liberación.
- *  - Botón "Actualizar" → guarda, sube fotos y vuelve a Screen 12.
+ * Comportamiento por estado:
+ *  - APROBADO: todos los campos deshabilitados, sin botón Guardar (solo lectura).
+ *  - ENTREGADO: formulario de liberación por lote:
+ *    · Select de lote (único, solo lotes no liberados).
+ *    · Cantidad muestra la cantidad entregada (no editable).
+ *    · Papel/Sobre habilitados.
+ *    · Select de plaga (multi, habilitado).
+ *    · Fecha/Hora habilitados con defaults del sistema.
+ *    · Cámara/Galería habilitados (hasta 2 fotos).
+ *    · Guardar → llama crearLiberacion + sube fotos → vuelve a Screen 12.
+ *
+ * Notas:
+ *  - Botón "Acta PDF" eliminado (evidencia = imagen).
+ *  - Alerta 30h (RN-035) se muestra si pasaron >30h sin liberación.
  */
 
-import React, {useEffect, useRef, useState} from 'react';
+import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {
   KeyboardAvoidingView,
   Image,
@@ -39,13 +45,13 @@ import {usePhotoCapture} from '../hooks/usePhotoCapture';
 import {useRequerimientosCatalogos} from '../hooks/useRequerimientosCatalogos';
 import type {RootStackParamList} from '../navigation/types';
 import {
-  actualizarRequerimiento,
+  crearLiberacion,
   eliminarFotoRequerimiento,
   extractErrorMessage,
   getFotoUrl,
   listarFotosRequerimiento,
+  listarLiberaciones,
   obtenerRequerimiento,
-  obtenerStockEspecie,
   subirFotoRequerimiento,
   type FotoRequerimientoDto,
 } from '../services/ApiClient';
@@ -53,7 +59,6 @@ import {theme} from '../theme';
 import {
   cantidadDesdeTexto,
   horaActual,
-  hoyISO,
   requiereAlertaLiberacion,
   toISODate,
 } from '../utils/requerimientos';
@@ -82,24 +87,28 @@ export default function EditarRequerimientoScreen() {
 
   const [fechaInput, setFechaInput] = useState('');
   const [fundoId, setFundoId] = useState<number | null>(null);
-  const [loteId, setLoteId] = useState<number | null>(null);
-  const [lotesIds, setLotesIds] = useState<number[]>([]);
-  const [especieId, setEspecieId] = useState<number | null>(null);
-  const [etapaId, setEtapaId] = useState<number | null>(null);
   const [cantidadTexto, setCantidadTexto] = useState('');
-  const [plagaId, setPlagaId] = useState<number | null>(null);
   const [plagasIds, setPlagasIds] = useState<number[]>([]);
   const [observaciones, setObservaciones] = useState('');
+  const [estado, setEstado] = useState<string>('REGISTRADO');
+  const [fotosExistentes, setFotosExistentes] = useState<Array<{foto: FotoRequerimientoDto; url: string}>>([]);
+
+  // V21: campos de liberación por lote
+  const [loteLiberacionId, setLoteLiberacionId] = useState<number | null>(null);
+  const [papelTexto, setPapelTexto] = useState('');
+  const [sobreTexto, setSobreTexto] = useState('');
   const [fechaLiberacionInput, setFechaLiberacionInput] = useState('');
   const [horaLiberacion, setHoraLiberacion] = useState('');
-  const [estado, setEstado] = useState<string>('REGISTRADO');
-  const [stock, setStock] = useState<number | null>(null);
-  const [fotosExistentes, setFotosExistentes] = useState<Array<{foto: FotoRequerimientoDto; url: string}>>([]);
+  const [lotesNoLiberados, setLotesNoLiberados] = useState<Array<{id: number; nombre: string}>>([]);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [alerta30, setAlerta30] = useState(false);
+
+  // Derivar modo desde el estado
+  const esSoloLectura = estado === 'APROBADO';
+  const esModoLiberacion = estado === 'ENTREGADO';
 
   // Rellena fecha/hora de liberación al agregar una foto (RN-036).
   const prevFotoCount = useRef(fotos.length);
@@ -111,65 +120,66 @@ export default function EditarRequerimientoScreen() {
     prevFotoCount.current = fotos.length;
   }, [fotos.length]);
 
-  useEffect(() => {
-    let activo = true;
-    (async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const r = await obtenerRequerimiento(id);
-        if (!activo) { return; }
-        setFechaInput(r.fecha);
-        setFundoId(r.fundoId);
-        setLoteId(r.loteId);
-        setLotesIds((r.lotes ?? []).map(l => l.id));
-        setEspecieId(r.especieId);
-        setEtapaId(r.etapaFenologicaId);
-        setCantidadTexto(String(r.cantidad));
-        setPlagaId(r.plagaId);
-        setPlagasIds((r.plagas ?? []).map(p => p.id));
-        setObservaciones(r.observaciones ?? '');
-        setFechaLiberacionInput(r.fechaLiberacion ?? '');
-        setHoraLiberacion(r.horaLiberacion ?? '');
-        setEstado(r.estado);
-        setAlerta30(requiereAlertaLiberacion(r));
+  const cargarRequerimiento = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const r = await obtenerRequerimiento(id);
+      setFechaInput(r.fecha);
+      setFundoId(r.fundoId);
+      setCantidadTexto(String(r.cantidad));
+      setPlagasIds((r.plagas ?? []).map(p => p.id));
+      setObservaciones(r.observaciones ?? '');
+      setEstado(r.estado);
+      setAlerta30(requiereAlertaLiberacion(r));
 
-        // Stock
-        try {
-          const s = await obtenerStockEspecie(r.especieId);
-          if (activo) { setStock(s.stock); }
-        } catch {
-          if (activo) { setStock(null); }
-        }
+      // V21: si ENTREGADO, pre-llenar fecha/hora de liberación con defaults del sistema
+      if (r.estado === 'ENTREGADO') {
+        setFechaLiberacionInput(toISODate(new Date()));
+        setHoraLiberacion(horaActual());
+      }
 
-        // Cargar fotos desde servidor
+      // V21: si ENTREGADO, calcular lotes no liberados
+      if (r.estado === 'ENTREGADO' && r.lotes && r.lotes.length > 0) {
         try {
-          const fotosServer = await listarFotosRequerimiento(id);
-          if (!activo) { return; }
-          const fotosConUrl = await Promise.all(
-            fotosServer.map(async f => ({
-              foto: f,
-              url: await getFotoUrl(id, f.id),
-            })),
-          );
-          setFotosExistentes(fotosConUrl);
+          const liberaciones = await listarLiberaciones(id);
+          const liberadosIds = new Set(liberaciones.map(l => l.loteId));
+          const noLiberados = r.lotes.filter(l => !liberadosIds.has(l.id));
+          setLotesNoLiberados(noLiberados);
+          if (noLiberados.length > 0) {
+            setLoteLiberacionId(noLiberados[0].id);
+          }
         } catch {
-          if (activo) { setFotosExistentes([]); }
-        }
-      } catch (e) {
-        if (activo) {
-          setError(extractErrorMessage(e));
-        }
-      } finally {
-        if (activo) {
-          setLoading(false);
+          setLotesNoLiberados(r.lotes);
+          if (r.lotes.length > 0) {
+            setLoteLiberacionId(r.lotes[0].id);
+          }
         }
       }
-    })();
-    return () => {
-      activo = false;
-    };
+
+      // Cargar fotos desde servidor
+      try {
+        const fotosServer = await listarFotosRequerimiento(id);
+        const fotosConUrl = await Promise.all(
+          fotosServer.map(async f => ({
+            foto: f,
+            url: await getFotoUrl(id, f.id),
+          })),
+        );
+        setFotosExistentes(fotosConUrl);
+      } catch {
+        setFotosExistentes([]);
+      }
+    } catch (e) {
+      setError(extractErrorMessage(e));
+    } finally {
+      setLoading(false);
+    }
   }, [id]);
+
+  useEffect(() => {
+    cargarRequerimiento();
+  }, [cargarRequerimiento]);
 
   const eliminarFotoServidor = async (fotoId: number) => {
     try {
@@ -184,24 +194,23 @@ export default function EditarRequerimientoScreen() {
     }
   };
 
-  const actualizar = async () => {
+  // V21: guardar liberación (solo ENTREGADO)
+  const guardarLiberacion = async () => {
+    if (!esModoLiberacion || loteLiberacionId == null) {
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
-      await actualizarRequerimiento(id, {
-        fecha: fechaInput || hoyISO(),
-        fundoId: fundoId!,
-        loteId: loteId ?? undefined,
-        lotes: lotesIds.length > 0 ? lotesIds : [loteId!],
-        especieId: especieId!,
-        etapaFenologicaId: etapaId,
-        cantidad: cantidadDesdeTexto(cantidadTexto),
-        plagaId: plagaId ?? null,
-        plagas: plagasIds,
-        estado: estado as never,
-        fechaLiberacion: fechaLiberacionInput || null,
-        horaLiberacion: horaLiberacion.trim() || null,
-        observaciones: observaciones.trim() || null,
+      const fundoParaLiberacion = fundoId ?? 0;
+      await crearLiberacion(id, {
+        fundoId: fundoParaLiberacion,
+        loteId: loteLiberacionId,
+        cantidadLiberada: cantidadDesdeTexto(cantidadTexto),
+        papelConPostura: cantidadDesdeTexto(papelTexto) || undefined,
+        sobreConCascarilla: cantidadDesdeTexto(sobreTexto) || undefined,
+        horaLiberacion: horaLiberacion || horaActual(),
+        observaciones: observaciones.trim() || undefined,
       });
       // Subir fotos nuevas al servidor
       for (const foto of fotos) {
@@ -223,10 +232,7 @@ export default function EditarRequerimientoScreen() {
     }
   };
 
-  const opcionesFundo = catalogo.fundos.map(f => ({label: f.nombre, value: f.id}));
-  const opcionesLote = catalogo.lotes.map(l => ({label: l.nombre, value: l.id}));
-  const opcionesEspecie = catalogo.especies.map(e => ({label: e.nombre, value: e.id}));
-  const opcionesEtapa = catalogo.etapas.map(e => ({label: e.nombre, value: e.id}));
+  const opcionesLote = lotesNoLiberados.map(l => ({label: l.nombre, value: l.id}));
   const opcionesPlaga = catalogo.plagas.map(p => ({label: p.nombre, value: p.id}));
 
   if (error) {
@@ -248,7 +254,7 @@ export default function EditarRequerimientoScreen() {
       fallbackMessage="Reintente nuevamente o cierre su sesión.">
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <AppHeader
-          title="Editar Requerimiento"
+          title={esSoloLectura ? 'Detalle Requerimiento' : 'Liberar Requerimiento'}
           showBack
           onBack={navigation.goBack}
         />
@@ -288,160 +294,162 @@ export default function EditarRequerimientoScreen() {
                   editable={false}
                   accessibilityLabel="Fecha"
                 />
-                <SelectField
-                  label="Fundo"
-                  accessibilityLabel="Fundo"
-                  optionAccessibilityPrefix="Opción Fundo"
-                  value={catalogo.fundos.find(f => f.id === fundoId)?.nombre ?? ''}
-                  options={opcionesFundo}
-                  onSelect={v => setFundoId(Number(v))}
-                  disabled
-                />
-                <MultiSelectField
-                  label="Lote"
-                  accessibilityLabel="Lote"
-                  optionAccessibilityPrefix="Opción Lote"
-                  selectedValues={lotesIds}
-                  options={opcionesLote}
-                  onSelect={setLotesIds}
-                  disabled
-                />
-                <SelectField
-                  label="Especie"
-                  accessibilityLabel="Especie"
-                  optionAccessibilityPrefix="Opción Especie"
-                  value={catalogo.especies.find(e => e.id === especieId)?.nombre ?? ''}
-                  options={opcionesEspecie}
-                  onSelect={v => setEspecieId(Number(v))}
-                  disabled
-                />
-                <SelectField
-                  label="Etapa fenológica"
-                  accessibilityLabel="Etapa fenológica"
-                  optionAccessibilityPrefix="Opción Etapa"
-                  value={catalogo.etapas.find(e => e.id === etapaId)?.nombre ?? ''}
-                  options={opcionesEtapa}
-                  onSelect={v => setEtapaId(Number(v))}
-                  disabled
-                />
                 <AppInput
                   label="Cantidad (millares)"
                   value={cantidadTexto}
                   editable={false}
                   accessibilityLabel="Cantidad"
                 />
-                <View style={styles.stockBlock}>
-                  <Text style={styles.stockLabel}>Stock disponible</Text>
-                  <Text style={styles.stockValue} accessibilityLabel="Stock disponible">
-                    {stock != null ? `${stock} millares` : 'Cargando…'}
-                  </Text>
-                </View>
-                <MultiSelectField
-                  label="Plaga objetivo"
-                  accessibilityLabel="Plaga objetivo"
-                  optionAccessibilityPrefix="Opción Plaga"
-                  selectedValues={plagasIds}
-                  options={opcionesPlaga}
-                  onSelect={setPlagasIds}
-                  disabled
-                />
-                <AppInput
-                  label="Observaciones"
-                  value={observaciones}
-                  onChangeText={setObservaciones}
-                  multiline
-                  numberOfLines={4}
-                  textAlignVertical="top"
-                  accessibilityLabel="Observaciones"
-                />
-                <DateTimePickerField
-                  label="Fecha de liberación"
-                  value={fechaLiberacionInput}
-                  mode="date"
-                  onChange={setFechaLiberacionInput}
-                  onClear={() => setFechaLiberacionInput('')}
-                  accessibilityLabel="Fecha de liberación"
-                />
-                <DateTimePickerField
-                  label="Hora de liberación"
-                  value={horaLiberacion}
-                  mode="time"
-                  onChange={setHoraLiberacion}
-                  onClear={() => setHoraLiberacion('')}
-                  accessibilityLabel="Hora de liberación"
-                />
 
-                <Text style={styles.fotoTitulo}>Foto de liberación</Text>
-                {fotosExistentes.length > 0 && (
-                  <View style={styles.fotoPreviews}>
-                    {fotosExistentes.map(({foto, url}, idx) => (
-                      <View key={String(foto.id)} style={styles.fotoPreview}>
-                        <Image
-                          source={{uri: url}}
-                          style={styles.fotoImagen}
-                        />
-                        <Text style={styles.fotoPreviewText}>Servidor {idx + 1}</Text>
+                {/* ---- APROBADO: solo lectura ---- */}
+                {esSoloLectura && (
+                  <Text style={styles.ayuda}>
+                    Este requerimiento está Aprobado. No hay campos editables.
+                  </Text>
+                )}
+
+                {/* ---- ENTREGADO: formulario de liberación por lote ---- */}
+                {esModoLiberacion && (
+                  <>
+                    <Text style={styles.subtitulo}>Liberar lote</Text>
+                    {lotesNoLiberados.length === 0 ? (
+                      <Text style={styles.ayuda}>Todos los lotes ya fueron liberados.</Text>
+                    ) : (
+                      <SelectField
+                        label="Lote a liberar"
+                        accessibilityLabel="Lote a liberar"
+                        optionAccessibilityPrefix="Opción Lote"
+                        value={lotesNoLiberados.find(l => l.id === loteLiberacionId)?.nombre ?? ''}
+                        options={opcionesLote}
+                        onSelect={v => setLoteLiberacionId(Number(v))}
+                        disabled={false}
+                      />
+                    )}
+
+                    <Text style={styles.subtitulo}>Presentaciones entregadas</Text>
+                    <AppInput
+                      label="Papel con postura"
+                      value={papelTexto}
+                      onChangeText={setPapelTexto}
+                      keyboardType="number-pad"
+                      editable={esModoLiberacion}
+                      maxLength={6}
+                      accessibilityLabel="Papel con postura"
+                    />
+                    <AppInput
+                      label="Sobre con cascarilla de arroz"
+                      value={sobreTexto}
+                      onChangeText={setSobreTexto}
+                      keyboardType="number-pad"
+                      editable={esModoLiberacion}
+                      maxLength={6}
+                      accessibilityLabel="Sobre con cascarilla"
+                    />
+
+                    <Text style={styles.subtitulo}>Plaga objetivo</Text>
+                    <MultiSelectField
+                      label="Plaga"
+                      accessibilityLabel="Plaga objetivo"
+                      optionAccessibilityPrefix="Opción Plaga"
+                      selectedValues={plagasIds}
+                      options={opcionesPlaga}
+                      onSelect={setPlagasIds}
+                      disabled={!esModoLiberacion}
+                    />
+
+                    <DateTimePickerField
+                      label="Fecha de liberación"
+                      value={fechaLiberacionInput}
+                      mode="date"
+                      onChange={setFechaLiberacionInput}
+                      onClear={() => setFechaLiberacionInput('')}
+                      editable={esModoLiberacion}
+                      accessibilityLabel="Fecha de liberación"
+                    />
+                    <DateTimePickerField
+                      label="Hora de liberación"
+                      value={horaLiberacion}
+                      mode="time"
+                      onChange={setHoraLiberacion}
+                      onClear={() => setHoraLiberacion('')}
+                      editable={esModoLiberacion}
+                      accessibilityLabel="Hora de liberación"
+                    />
+
+                    <Text style={styles.fotoTitulo}>Foto de liberación</Text>
+                    {fotosExistentes.length > 0 && (
+                      <View style={styles.fotoPreviews}>
+                        {fotosExistentes.map(({foto, url}, idx) => (
+                          <View key={String(foto.id)} style={styles.fotoPreview}>
+                            <Image
+                              source={{uri: url}}
+                              style={styles.fotoImagen}
+                            />
+                            <Text style={styles.fotoPreviewText}>Servidor {idx + 1}</Text>
+                            <AppButton
+                              label="Quitar"
+                              icon="delete-outline"
+                              variant="text"
+                              onPress={() => eliminarFotoServidor(foto.id)}
+                              accessibilityLabel={`Quitar foto del servidor ${idx + 1}`}
+                            />
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                    <View style={styles.fotoAcciones}>
+                      <View style={styles.fotoAccion}>
                         <AppButton
-                          label="Quitar"
-                          icon="delete-outline"
-                          variant="text"
-                          onPress={() => eliminarFotoServidor(foto.id)}
-                          accessibilityLabel={`Quitar foto del servidor ${idx + 1}`}
+                          label="Cámara"
+                          icon="camera-outline"
+                          variant="secondary"
+                          disabled={fotos.length + fotosExistentes.length >= MAX_PHOTOS}
+                          onPress={tomarFoto}
+                          accessibilityLabel="Tomar foto de liberación"
                         />
                       </View>
-                    ))}
-                  </View>
-                )}
-                <View style={styles.fotoAcciones}>
-                  <View style={styles.fotoAccion}>
-                    <AppButton
-                      label="Cámara"
-                      icon="camera-outline"
-                      variant="secondary"
-                      disabled={fotos.length + fotosExistentes.length >= MAX_PHOTOS}
-                      onPress={tomarFoto}
-                      accessibilityLabel="Tomar foto de liberación"
-                    />
-                  </View>
-                  <View style={styles.fotoAccion}>
-                    <AppButton
-                      label="Galería"
-                      icon="image-outline"
-                      variant="secondary"
-                      disabled={fotos.length + fotosExistentes.length >= MAX_PHOTOS}
-                      onPress={seleccionarFoto}
-                      accessibilityLabel="Seleccionar foto de liberación de la galería"
-                    />
-                  </View>
-                </View>
-                {fotoError ? (
-                  <Text accessibilityRole="alert" style={styles.fotoError}>
-                    {fotoError}
-                  </Text>
-                ) : null}
-                <View style={styles.fotoPreviews}>
-                  {fotos.map((foto, idx) => (
-                    <View key={foto.uri} style={styles.fotoPreview}>
-                      <Image source={{uri: foto.uri}} style={styles.fotoImagen} />
-                      <Text style={styles.fotoPreviewText}>Local {idx + 1}</Text>
-                      <AppButton
-                        label="Quitar"
-                        icon="delete-outline"
-                        variant="text"
-                        onPress={() => quitarFoto(idx)}
-                        accessibilityLabel={`Quitar foto de liberación ${idx + 1}`}
-                      />
+                      <View style={styles.fotoAccion}>
+                        <AppButton
+                          label="Galería"
+                          icon="image-outline"
+                          variant="secondary"
+                          disabled={fotos.length + fotosExistentes.length >= MAX_PHOTOS}
+                          onPress={seleccionarFoto}
+                          accessibilityLabel="Seleccionar foto de liberación de la galería"
+                        />
+                      </View>
                     </View>
-                  ))}
-                </View>
+                    {fotoError ? (
+                      <Text accessibilityRole="alert" style={styles.fotoError}>
+                        {fotoError}
+                      </Text>
+                    ) : null}
+                    <View style={styles.fotoPreviews}>
+                      {fotos.map((foto, idx) => (
+                        <View key={foto.uri} style={styles.fotoPreview}>
+                          <Image source={{uri: foto.uri}} style={styles.fotoImagen} />
+                          <Text style={styles.fotoPreviewText}>Local {idx + 1}</Text>
+                          <AppButton
+                            label="Quitar"
+                            icon="delete-outline"
+                            variant="text"
+                            onPress={() => quitarFoto(idx)}
+                            accessibilityLabel={`Quitar foto de liberación ${idx + 1}`}
+                          />
+                        </View>
+                      ))}
+                    </View>
 
-                <AppButton
-                  label="Actualizar"
-                  icon="content-save-outline"
-                  loading={saving}
-                  onPress={actualizar}
-                  accessibilityLabel="Actualizar requerimiento"
-                />
+                    <AppButton
+                      label="Guardar liberación"
+                      icon="content-save-outline"
+                      loading={saving}
+                      disabled={loteLiberacionId == null || lotesNoLiberados.length === 0}
+                      onPress={guardarLiberacion}
+                      accessibilityLabel="Guardar liberación"
+                    />
+                  </>
+                )}
               </>
             )}
           </ScrollView>
@@ -466,6 +474,20 @@ const styles = StyleSheet.create({
     padding: theme.spacing[4],
   },
   estadoChip: {
+    marginBottom: theme.spacing[3],
+  },
+  subtitulo: {
+    fontFamily: theme.typography.subtitle2.fontFamily,
+    fontSize: theme.typography.subtitle2.fontSize,
+    lineHeight: theme.typography.subtitle2.lineHeight,
+    color: theme.colors.text.primary,
+    marginTop: theme.spacing[2],
+    marginBottom: theme.spacing[2],
+  },
+  ayuda: {
+    fontFamily: theme.typography.caption.fontFamily,
+    fontSize: theme.typography.caption.fontSize,
+    color: theme.colors.text.secondary,
     marginBottom: theme.spacing[3],
   },
   alerta30: {

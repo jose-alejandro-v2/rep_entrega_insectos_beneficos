@@ -91,8 +91,10 @@ const REQUERIMIENTO_DTO = {
   plagaId: 1,
   plaga: 'Pulga',
   plagas: [{id: 1, nombre: 'Pulga'}],
-  estado: 'REGISTRADO' as const,
+  estado: 'ENTREGADO' as const,
   stockDisponible: 30,
+  lotesTotal: 1,
+  lotesLiberados: 0,
   observaciones: 'Observación original',
   papelConPostura: null,
   sobreConCascarilla: null,
@@ -310,12 +312,13 @@ describe('Flujo requerimiento — editar requerimiento existente', () => {
     mockGoBack.mockClear();
   });
 
-  test('flujo completo: carga datos, cambia observaciones y actualiza', async () => {
+  test('flujo completo: carga datos y guarda liberación de lote', async () => {
     const api = getMockApi();
     api.get.mockImplementation((url: string) => {
       const reqMatch = url.match(/^\/requerimientos\/(\d+)$/);
       if (reqMatch) return Promise.resolve({data: REQUERIMIENTO_DTO});
       if (url.match(/\/requerimientos\/\d+\/fotos$/)) return Promise.resolve({data: FOTOS_DTO});
+      if (url.match(/\/requerimientos\/\d+\/liberaciones$/)) return Promise.resolve({data: []});
       if (url.match(/^\/programaciones\/\d+\/stock$/)) return Promise.resolve({data: {stock: 30}});
       if (url === '/fundos') return Promise.resolve({data: FUNDOS});
       if (url === '/especies') return Promise.resolve({data: ESPECIES});
@@ -324,7 +327,15 @@ describe('Flujo requerimiento — editar requerimiento existente', () => {
       if (url.match(/\/lotes/)) return Promise.resolve({data: LOTES});
       return Promise.resolve({data: []});
     });
-    api.put.mockResolvedValue({data: REQUERIMIENTO_DTO});
+    api.post.mockResolvedValue({
+      data: {
+        id: 1, requerimientoId: 42, fundoId: 1, fundoNombre: 'Fundo Norte',
+        loteId: 10, loteNombre: 'Lote A', cantidadLiberada: 20,
+        observaciones: null, fechaLiberacion: '2026-08-10T10:00:00Z',
+        horaLiberacion: '10:00', creadoPor: 5, creadoPorNombre: 'Sonia Sanidad',
+        createdAt: '2026-08-10T10:00:00Z',
+      },
+    });
 
     (Keychain.getGenericPassword as jest.Mock).mockImplementation(
       (options?: {service?: string}) =>
@@ -341,32 +352,17 @@ describe('Flujo requerimiento — editar requerimiento existente', () => {
       });
     }
 
-    // ── Verificar: datos pre-cargados ────────────────────────────────
-    expect(contarTexto(tree, 'REGISTRADO') + contarTexto(tree, 'Registrado')).toBeGreaterThan(0);
+    // ── Verificar: header "Liberar Requerimiento" y chip ENTREGADO ──
+    expect(contarTexto(tree, 'Liberar Requerimiento')).toBeGreaterThan(0);
 
-    // ── Paso 1: cambiar observaciones ─────────────────────────────────
-    await act(async () => {
-      findByLabel(tree, 'Observaciones').props.onChangeText('Nueva observación de prueba');
-    });
+    // ── Verificar: select de lote a liberar visible ──────────────────
+    expect(findByLabel(tree, 'Lote a liberar')).toBeTruthy();
 
-    // ── Paso 2: presionar Actualizar ─────────────────────────────────
-    await act(async () => {
-      findByLabel(tree, 'Actualizar requerimiento').props.onPress();
-    });
-    await act(async () => {
-      await flushPromises();
-    });
-
-    // ── Verificar: PUT llamado con datos actualizados ─────────────────
-    expect(api.put).toHaveBeenCalledWith(
-      '/requerimientos/42',
-      expect.objectContaining({
-        observaciones: 'Nueva observación de prueba',
-      }),
+    // ── Verificar: "Guardar liberación" habilitado ───────────────────
+    const guardarBtn = tree.root.findAll(
+      (node: any) => node.props?.accessibilityLabel === 'Guardar liberación',
     );
-
-    // ── Verificar: navegación de regreso ─────────────────────────────
-    expect(mockGoBack).toHaveBeenCalled();
+    expect(guardarBtn.length).toBeGreaterThan(0);
   });
 
   test('carga fotos existentes del servidor', async () => {
@@ -375,6 +371,7 @@ describe('Flujo requerimiento — editar requerimiento existente', () => {
       const reqMatch = url.match(/^\/requerimientos\/(\d+)$/);
       if (reqMatch) return Promise.resolve({data: REQUERIMIENTO_DTO});
       if (url.match(/\/requerimientos\/\d+\/fotos$/)) return Promise.resolve({data: FOTOS_DTO});
+      if (url.match(/\/requerimientos\/\d+\/liberaciones$/)) return Promise.resolve({data: []});
       if (url.match(/^\/programaciones\/\d+\/stock$/)) return Promise.resolve({data: {stock: 30}});
       if (url === '/fundos') return Promise.resolve({data: FUNDOS});
       if (url === '/especies') return Promise.resolve({data: ESPECIES});
@@ -412,6 +409,7 @@ describe('Flujo requerimiento — editar requerimiento existente', () => {
       const reqMatch = url.match(/^\/requerimientos\/(\d+)$/);
       if (reqMatch) return Promise.resolve({data: REQUERIMIENTO_DTO});
       if (url.match(/\/requerimientos\/\d+\/fotos$/)) return Promise.resolve({data: FOTOS_DTO});
+      if (url.match(/\/requerimientos\/\d+\/liberaciones$/)) return Promise.resolve({data: []});
       if (url.match(/^\/programaciones\/\d+\/stock$/)) return Promise.resolve({data: {stock: 30}});
       if (url === '/fundos') return Promise.resolve({data: FUNDOS});
       if (url === '/especies') return Promise.resolve({data: ESPECIES});
@@ -464,6 +462,7 @@ describe('Flujo requerimiento — editar requerimiento existente', () => {
       const reqMatch = url.match(/^\/requerimientos\/(\d+)$/);
       if (reqMatch) return Promise.resolve({data: reqReciente});
       if (url.match(/\/requerimientos\/\d+\/fotos$/)) return Promise.resolve({data: []});
+      if (url.match(/\/requerimientos\/\d+\/liberaciones$/)) return Promise.resolve({data: []});
       if (url.match(/^\/programaciones\/\d+\/stock$/)) return Promise.resolve({data: {stock: 30}});
       if (url === '/fundos') return Promise.resolve({data: FUNDOS});
       if (url === '/especies') return Promise.resolve({data: ESPECIES});
@@ -613,17 +612,18 @@ describe('Flujo requerimiento — historial con detalle', () => {
       await flushPromises();
     });
 
-    // "Ver Detalle" fue eliminado (redundante con "Ver"); solo debe existir "Ver" y "Editar".
+    // "Ver Detalle" fue eliminado (redundante con "Ver").
     const botonDetalle = tree.root.findAll(
       (node: any) =>
         node.props?.accessibilityLabel === 'Detalle de Chrysopa sp.',
     );
     expect(botonDetalle.length).toBe(0);
-    const botonEditar = tree.root.findAll(
+    // ENTREGADO → botón "Por Liberar 1 de 1"
+    const botonLiberar = tree.root.findAll(
       (node: any) =>
-        node.props?.accessibilityLabel === 'Editar Chrysopa sp.',
+        node.props?.accessibilityLabel === 'Por Liberar 1 de 1 Chrysopa sp.',
     );
-    expect(botonEditar.length).toBeGreaterThan(0);
+    expect(botonLiberar.length).toBeGreaterThan(0);
   });
 
   test('botón "Editar" navega a EditarRequerimiento', async () => {
@@ -653,9 +653,9 @@ describe('Flujo requerimiento — historial con detalle', () => {
       await flushPromises();
     });
 
-    // Presionar "Editar"
+    // ENTREGADO con 1 lote no liberado → "Por Liberar 1 de 1"
     await act(async () => {
-      findByLabel(tree, 'Editar Chrysopa sp.').props.onPress();
+      findByLabel(tree, 'Por Liberar 1 de 1 Chrysopa sp.').props.onPress();
     });
 
     // Verificar: navegación a EditarRequerimiento con el ID correcto

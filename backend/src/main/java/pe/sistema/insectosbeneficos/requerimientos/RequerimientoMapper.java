@@ -69,6 +69,12 @@ public class RequerimientoMapper {
         dto.setLotes(obtenerLotes(r.getId()));
         dto.setPlagas(obtenerPlagas(r.getId()));
 
+        // V21: contadores de liberación por lote
+        long totalLotes = requerimientoLoteRepository.countByRequerimientoId(r.getId());
+        long liberados = requerimientoLoteRepository.countByRequerimientoIdAndLiberadoFalse(r.getId());
+        dto.setLotesTotal((int) totalLotes);
+        dto.setLotesLiberados((int) (totalLotes - liberados));
+
         return dto;
     }
 

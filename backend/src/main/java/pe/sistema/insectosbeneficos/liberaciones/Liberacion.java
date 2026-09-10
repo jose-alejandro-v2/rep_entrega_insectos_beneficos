@@ -45,6 +45,12 @@ public class Liberacion {
     @Column(columnDefinition = "text")
     private String observaciones;
 
+    @Column(name = "papel_con_postura")
+    private BigDecimal papelConPostura;
+
+    @Column(name = "sobre_con_cascarilla")
+    private BigDecimal sobreConCascarilla;
+
     @Column(name = "fecha_liberacion", nullable = false)
     private Instant fechaLiberacion = Instant.now();
 
@@ -74,6 +80,12 @@ public class Liberacion {
 
     public String getObservaciones() { return observaciones; }
     public void setObservaciones(String observaciones) { this.observaciones = observaciones; }
+
+    public BigDecimal getPapelConPostura() { return papelConPostura; }
+    public void setPapelConPostura(BigDecimal papelConPostura) { this.papelConPostura = papelConPostura; }
+
+    public BigDecimal getSobreConCascarilla() { return sobreConCascarilla; }
+    public void setSobreConCascarilla(BigDecimal sobreConCascarilla) { this.sobreConCascarilla = sobreConCascarilla; }
 
     public Instant getFechaLiberacion() { return fechaLiberacion; }
     public void setFechaLiberacion(Instant fechaLiberacion) { this.fechaLiberacion = fechaLiberacion; }

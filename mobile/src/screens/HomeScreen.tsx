@@ -80,7 +80,8 @@ export default function HomeScreen() {
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.content}>
-        <Text style={styles.welcome}>Bienvenido(a), {user.nombre}</Text>
+        <Text style={styles.welcome}>Bienvenido(a),</Text>
+        <Text style={styles.welcome_sub}>{user.nombre}</Text>
         <Text style={styles.perfil}>Perfil: {user.rol}</Text>
 
         {grupos.map((grupo, index) => (
@@ -123,6 +124,13 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.h2.fontFamily,
     fontSize: theme.typography.h2.fontSize,
     lineHeight: theme.typography.h2.lineHeight,
+    color: theme.colors.text.primary,
+    marginBottom: 4,
+  },
+    welcome_sub: {
+    fontFamily: theme.typography.h3.fontFamily,
+    fontSize: theme.typography.h3.fontSize,
+    lineHeight: theme.typography.h3.lineHeight,
     color: theme.colors.text.primary,
     marginBottom: 4,
   },

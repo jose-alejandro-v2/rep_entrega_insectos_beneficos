@@ -68,7 +68,7 @@ AGENTS.md
 README.md
 docker-compose.yml              (proyecto `repo_registro_insectos_beneficos`: postgres:16 + backend + nginx)
 nginx/nginx.conf                (proxy 8080 → backend:6101)
-backend/                     (API Quarkus v2 — auth/usuarios bajo /api/v1, Flyway V1-V20, Dockerfile multi-stage,
+backend/                     (API Quarkus v2 — auth/usuarios bajo /api/v1, Flyway V1-V21, Dockerfile multi-stage,
                               89 tests; imagen `repo_registro_insectos_beneficos-backend`, TZ America/Lima)
 mobile/                      (React Native CLI 0.86 / React 19.2.3 — auth v2: login 3 pasos,
                               ApiClient.ts + keychain, ServerCheck/Settings, 127 tests)
@@ -222,8 +222,16 @@ y reportar al Orchestrator; no "arreglarlo" en silencio.
   (historial) y "Acta PDF" (formulario admin) eliminados; el detalle muestra todos los lotes/plagas.
   **Fotos en BYTEA en BD** (migración V20 `contenido` nullable, patrón
   `repo_control_equipos_apilamiento_v2`; fallback a disco para fotos legacy V11).
+  **Liberación por lote** (V21): columna `liberado` en `requerimiento_lotes`,
+  `papel_con_postura`/`sobre_con_cascarilla` por liberación en `liberaciones`,
+  flujo multi-estado admin/user (Screen 7/8/12/13).
   Backend: 89 tests BE · Mobile: 127 tests MO. Antes de este hito: su primer commit documentaba solo
   multi-select (V19) como entrada v1.11.0; esta entrada unifica el alcance completo de la versión.
+- **v1.11.1 (2026-09-10) = Fix stock source + Screen 13 campos habilitados**: Stock ahora consulta
+  `cumplimiento_programacion.total_real` (antes `detalle_programaciones.stock_final`). Test helpers
+  crean cumplimiento para el L/J exacto del mes actual. Screen 13 (ENTREGADO): papel/sobre, plaga
+  multi-select y fecha/hora habilitados con defaults del sistema. Screen 12: auto-refresh al volver
+  de edición (focus listener). Backend: 89 tests BE · Mobile: 127 tests MO.
 - Web (React/Vite) y CI/CD siguen pendientes (próxima fase).
 - **Endpoint backend para servir fotos** ya está cubierto por el flujo BYTEA
   (`/api/v1/requerimientos/{id}/fotos/contenido`, Ordenable en Response). La validación

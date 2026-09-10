@@ -16,6 +16,8 @@ public class LiberacionDto {
     private String loteNombre;
     private BigDecimal cantidadLiberada;
     private String observaciones;
+    private BigDecimal papelConPostura;
+    private BigDecimal sobreConCascarilla;
     private Instant fechaLiberacion;
     private String horaLiberacion;
     private Long creadoPor;
@@ -45,6 +47,12 @@ public class LiberacionDto {
 
     public String getObservaciones() { return observaciones; }
     public void setObservaciones(String observaciones) { this.observaciones = observaciones; }
+
+    public BigDecimal getPapelConPostura() { return papelConPostura; }
+    public void setPapelConPostura(BigDecimal papelConPostura) { this.papelConPostura = papelConPostura; }
+
+    public BigDecimal getSobreConCascarilla() { return sobreConCascarilla; }
+    public void setSobreConCascarilla(BigDecimal sobreConCascarilla) { this.sobreConCascarilla = sobreConCascarilla; }
 
     public Instant getFechaLiberacion() { return fechaLiberacion; }
     public void setFechaLiberacion(Instant fechaLiberacion) { this.fechaLiberacion = fechaLiberacion; }

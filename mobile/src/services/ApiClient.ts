@@ -659,6 +659,10 @@ export interface RequerimientoDto {
   plaga: string | null;
   /** Plagas asociadas al requerimiento (multi-select). */
   plagas: Array<{id: number; nombre: string}>;
+  /** V21: total de lotes del requerimiento. */
+  lotesTotal: number | null;
+  /** V21: cantidad de lotes ya liberados. */
+  lotesLiberados: number | null;
   estado: EstadoRequerimiento;
   /** Stock disponible en el momento (solo lectura, Screen 10). */
   stockDisponible: number;
@@ -986,11 +990,13 @@ export interface LiberacionDto {
   createdAt: string;
 }
 
-/** Request para registrar una liberación en campo (RF-080..086). */
+/** Request para registrar una liberación en campo (RF-080..086 / V21). */
 export interface CrearLiberacionRequest {
   fundoId: number;
   loteId: number;
   cantidadLiberada: number;
+  papelConPostura?: number | null;
+  sobreConCascarilla?: number | null;
   observaciones?: string | null;
   horaLiberacion: string;
 }

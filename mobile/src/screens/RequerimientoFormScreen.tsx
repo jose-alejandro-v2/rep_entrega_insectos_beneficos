@@ -5,11 +5,10 @@
  * Comportamiento por modo:
  *  - Creación (sin `id`): campos base habilitados con selección múltiple de
  *    lotes y plagas (V19); Papel/Sobre deshabilitados (RF-162).
- *  - Edición (con `id`): solo Estado habilitado; Papel/Sobre se habilitan si
- *    Estado = Entregado (RF-163/164) o Aprobado (evidencia del documento de
- *    entrega). La sección de evidencia fotográfica (cámara/galería, JPEG/PNG
- *    ≤ 5 MB, máx 2) está disponible en edición con estado Aprobado o Entregado
- *    y se guarda en BD (BYTEA, V20).
+ *  - Edición (con `id`): solo Estado habilitado; Papel/Sobre + cámara/galería
+ *    se habilitan SOLO cuando el admin cambia de APROBADO a ENTREGADO
+ *    (RF-163/164). Si el request viene de REGISTRADO/PENDIENTE y pasa a
+ *    APROBADO, solo cambia el estado (sin papel/sobre ni fotos).
  *
  * Validación (RF-165): si Estado = Entregado → Papel + Sobre obligatorios y su
  * suma == cantidad plaga para habilitar Guardar. Al guardar → vuelve a Screen 7.
@@ -82,6 +81,7 @@ export default function RequerimientoFormScreen() {
   const insets = useSafeAreaInsets();
 
   const id = route.params?.id;
+  const readOnly = route.params?.readOnly ?? false;
   const modo: 'crear' | 'editar' = id != null ? 'editar' : 'crear';
 
   const catalogo = useRequerimientosCatalogos();
@@ -100,6 +100,8 @@ export default function RequerimientoFormScreen() {
   const [observaciones, setObservaciones] = useState('');
   const [papelTexto, setPapelTexto] = useState('');
   const [sobreTexto, setSobreTexto] = useState('');
+  // Estado original del request al cargar (para distinguir APROBADO→ENTREGADO de REGISTRADO→APROBADO).
+  const estadoOriginal = useRef<EstadoRequerimiento | null>(null);
 
   const [loading, setLoading] = useState(modo === 'editar');
   const [error, setError] = useState<string | null>(null);
@@ -149,6 +151,7 @@ export default function RequerimientoFormScreen() {
       setCantidadTexto(String(r.cantidad));
       setPlagaId(r.plagaId ?? null);
       setPlagasIds((r.plagas ?? []).map(p => p.id));
+      estadoOriginal.current = r.estado;
       setEstado(r.estado);
       setFechaLiberacionInput(r.fechaLiberacion ?? '');
       setHoraLiberacion(r.horaLiberacion ?? '');
@@ -202,18 +205,19 @@ export default function RequerimientoFormScreen() {
   };
 
   // RF-162: en creación Papel/Sobre están deshabilitados; en edición se
-  // habilitan si el estado es Entregado (RF-163/164) o Aprobado (evidencia
-  // del documento de entrega listo para captura).
+  // habilitan solo cuando el admin cambia de APROBADO a ENTREGADO (RF-163/164).
+  // Si el request viene de REGISTRADO/PENDIENTE y pasa a APROBADO, NO se habilitan.
+  // V21: readOnly desactiva todo.
   const papelSobreHabilitados =
-    modo === 'editar' && (esEstadoEntregado(estado) || estado === 'APROBADO');
-  // La captura de evidencia (cámara/galería) aplica en edición con estado
-  // Aprobado o Entregado (documento de entrega).
+    !readOnly && modo === 'editar' && esEstadoEntregado(estado) && estadoOriginal.current === 'APROBADO';
+  // La captura de evidencia (cámara/galería) solo aplica cuando el admin
+  // cambia de APROBADO a ENTREGADO (documento de entrega).
   const evidencioSeccionVisible =
-    modo === 'editar' && (estado === 'APROBADO' || esEstadoEntregado(estado));
+    !readOnly && modo === 'editar' && esEstadoEntregado(estado) && estadoOriginal.current === 'APROBADO';
   // Otros campos (fecha/fundo/lote/especie/cantidad/objetivo) solo editables en creación.
-  const camposBaseHabilitados = modo === 'crear';
-  // El campo Estado es siempre editable (creación y edición, RF-163).
-  const estadoEditable = true;
+  const camposBaseHabilitados = !readOnly && modo === 'crear';
+  // El campo Estado es siempre editable (creación y edición, RF-163), salvo readOnly.
+  const estadoEditable = !readOnly;
 
   const isoFecha = fechaInput;
   const isoFechaLiberacion = fechaLiberacionInput || null;
@@ -332,7 +336,7 @@ export default function RequerimientoFormScreen() {
       fallbackMessage="Reintente nuevamente o cierre su sesión.">
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <AppHeader
-          title={modo === 'crear' ? 'Nueva solicitud' : 'Editar solicitud'}
+          title={modo === 'crear' ? 'Nueva solicitud' : readOnly ? 'Detalle solicitud' : 'Editar solicitud'}
           showBack
           onBack={navigation.goBack}
         />
@@ -545,14 +549,16 @@ export default function RequerimientoFormScreen() {
                   </>
                 ) : null}
 
-                <AppButton
-                  label="Guardar"
-                  icon="content-save-outline"
-                  loading={saving}
-                  disabled={!puedeGuardar}
-                  onPress={guardar}
-                  accessibilityLabel="Guardar solicitud"
-                />
+                {readOnly ? null : (
+                  <AppButton
+                    label="Guardar"
+                    icon="content-save-outline"
+                    loading={saving}
+                    disabled={!puedeGuardar}
+                    onPress={guardar}
+                    accessibilityLabel="Guardar solicitud"
+                  />
+                )}
               </>
             )}
           </ScrollView>

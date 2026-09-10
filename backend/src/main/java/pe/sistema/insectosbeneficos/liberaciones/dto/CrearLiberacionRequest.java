@@ -24,6 +24,10 @@ public class CrearLiberacionRequest {
 
     private String observaciones;
 
+    private BigDecimal papelConPostura;
+
+    private BigDecimal sobreConCascarilla;
+
     @NotBlank(message = "La hora de liberación es requerida")
     private String horaLiberacion;
 
@@ -41,4 +45,10 @@ public class CrearLiberacionRequest {
 
     public String getHoraLiberacion() { return horaLiberacion; }
     public void setHoraLiberacion(String horaLiberacion) { this.horaLiberacion = horaLiberacion; }
+
+    public BigDecimal getPapelConPostura() { return papelConPostura; }
+    public void setPapelConPostura(BigDecimal papelConPostura) { this.papelConPostura = papelConPostura; }
+
+    public BigDecimal getSobreConCascarilla() { return sobreConCascarilla; }
+    public void setSobreConCascarilla(BigDecimal sobreConCascarilla) { this.sobreConCascarilla = sobreConCascarilla; }
 }

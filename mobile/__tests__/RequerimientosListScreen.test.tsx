@@ -129,17 +129,18 @@ describe('RequerimientosListScreen — listado admin', () => {
     expect(mockNavigate).toHaveBeenCalledWith('RequerimientoForm', {});
   });
 
-  test('Editar por registro navega a Screen 8 con el id', async () => {
+  test('botón dinámico navega a Screen 8 con el id y readOnly', async () => {
     const tree = await renderLista();
     await act(async () => {
       await flushPromises();
     });
 
+    // APROBADO → botón "Por Entregar", readOnly=false
     await act(async () => {
-      findByLabel(tree, 'Editar Chrysopa sp.').props.onPress();
+      findByLabel(tree, 'Por Entregar Chrysopa sp.').props.onPress();
     });
 
-    expect(mockNavigate).toHaveBeenCalledWith('RequerimientoForm', {id: 1});
+    expect(mockNavigate).toHaveBeenCalledWith('RequerimientoForm', {id: 1, readOnly: false});
   });
 
   test('Aplicar filtro llama a listarRequerimientos con el rango', async () => {

@@ -49,6 +49,12 @@ public class RequerimientoDto {
     /** Selección múltiple de plagas (V19). */
     private List<PlagaInfo> plagas;
 
+    /** V21: total de lotes del requerimiento. */
+    private Integer lotesTotal;
+
+    /** V21: cantidad de lotes ya liberados. */
+    private Integer lotesLiberados;
+
     private String estado;
     private BigDecimal stockDisponible;
     private Instant fechaLiberacion;
@@ -140,6 +146,10 @@ public class RequerimientoDto {
     public void setLotes(List<LoteInfo> lotes) { this.lotes = lotes; }
     public List<PlagaInfo> getPlagas() { return plagas; }
     public void setPlagas(List<PlagaInfo> plagas) { this.plagas = plagas; }
+    public Integer getLotesTotal() { return lotesTotal; }
+    public void setLotesTotal(Integer lotesTotal) { this.lotesTotal = lotesTotal; }
+    public Integer getLotesLiberados() { return lotesLiberados; }
+    public void setLotesLiberados(Integer lotesLiberados) { this.lotesLiberados = lotesLiberados; }
     public String getEstado() { return estado; }
     public void setEstado(String estado) { this.estado = estado; }
     public BigDecimal getStockDisponible() { return stockDisponible; }

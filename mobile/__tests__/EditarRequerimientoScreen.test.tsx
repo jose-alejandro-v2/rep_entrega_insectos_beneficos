@@ -15,7 +15,7 @@ import React from 'react';
 import ReactTestRenderer, {act} from 'react-test-renderer';
 import * as Keychain from 'react-native-keychain';
 import EditarRequerimientoScreen from '../src/screens/EditarRequerimientoScreen';
-import {clearToken} from '../src/services/ApiClient';
+import {clearToken, type EstadoRequerimiento} from '../src/services/ApiClient';
 import {flushPromises, getMockApi, makeToken} from '../test-utils/helpers';
 
 const mockGoBack = jest.fn();
@@ -57,7 +57,7 @@ const ETAPAS = [{id: 1, nombre: 'Emergencia', estado: true}];
 const PLAGAS = [{id: 1, nombre: 'Pulga', estado: true}];
 
 /** Requerimiento base con timestamps relativos a `now` (para RN-035). */
-function requerimientoBase({updatedAt}: {updatedAt: string}) {
+function requerimientoBase({updatedAt, estado = 'ENTREGADO'}: {updatedAt: string; estado?: EstadoRequerimiento}) {
   return {
     id: 4,
     fecha: '2026-08-10',
@@ -65,6 +65,7 @@ function requerimientoBase({updatedAt}: {updatedAt: string}) {
     fundo: 'Fundo Norte',
     loteId: 10,
     lote: 'Lote A',
+    lotes: [{id: 10, nombre: 'Lote A'}],
     especieId: 1,
     especie: 'Chrysopa sp.',
     etapaFenologicaId: null,
@@ -72,7 +73,8 @@ function requerimientoBase({updatedAt}: {updatedAt: string}) {
     cantidad: 20,
     plagaId: 1,
     plaga: 'Pulga',
-    estado: 'RECIBIDO' as const,
+    plagas: [{id: 1, nombre: 'Pulga'}],
+    estado,
     stockDisponible: 30,
     observaciones: null,
     papelConPostura: null,
@@ -105,6 +107,9 @@ async function renderEdicion() {
     }
     if (url.match(/\/requerimientos\/\d+\/fotos$/)) {
       return Promise.resolve({data: FOTOS_DTO});
+    }
+    if (url.match(/\/requerimientos\/\d+\/liberaciones$/)) {
+      return Promise.resolve({data: []});
     }
     const stockMatch = url.match(/^\/programaciones\/(\d+)\/stock$/);
     if (stockMatch) {
@@ -145,6 +150,7 @@ describe('EditarRequerimientoScreen — alerta de 30 h (RN-035)', () => {
   test('muestra la alerta cuando RECIBIDO superó 30 h sin foto de liberación', async () => {
     requerimientoActual = requerimientoBase({
       updatedAt: new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString(),
+      estado: 'RECIBIDO',
     });
     const tree = await renderEdicion();
     await act(async () => {
@@ -157,6 +163,7 @@ describe('EditarRequerimientoScreen — alerta de 30 h (RN-035)', () => {
   test('NO muestra la alerta cuando RECIBIDO es reciente (menos de 30 h)', async () => {
     requerimientoActual = requerimientoBase({
       updatedAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+      estado: 'RECIBIDO',
     });
     const tree = await renderEdicion();
     await act(async () => {

@@ -41,12 +41,12 @@ backend/      API Quarkus v2 — auth/usuarios bajo /api/v1, login 3 pasos, role
               (multi-select lotes/plagas con tablas pivote),
               fotos de requerimiento (bytes BYTEA en BD, V20), sync offline,
               cumplimiento de producción, despachos/recepciones/liberaciones
-              (migraciones V1-V20, Dockerfile multi-stage, TZ America/Lima)
+              (migraciones V1-V21, Dockerfile multi-stage, TZ America/Lima)
 mobile/       App React Native CLI 0.86 / React 19.2.3 — auth v2 (login 3 pasos, URL runtime,
               SecureStore/keychain), módulos Programación (Lunes/Jueves reales + Restante, pull-to-refresh,
               cumplimiento de producción), Requerimientos (multi-select lotes/plagas, evidencia de entrega
               en estado Aprobado), Catálogos, fotos de requerimiento
-              + hook usePhotoCapture — versión 1.11.0 (online-only, offline descartado)
+               + hook usePhotoCapture — versión 1.11.1 (stock fix + Screen 13 campos habilitados)
 web/          Frontend React + Vite (pendiente de scaffold)
 docs_implementacion/
 ├── _sdd/                      Especificación, plan, tareas e implementación
@@ -125,13 +125,15 @@ docs_implementacion/
   la **edición** sigue restringida a Lunes/Jueves). En "Nuevo" la tabla del mes aparece inmediatamente
   habilitada, sin esperar a seleccionar especie; la especie solo habilita "Enviar stock". Zona horaria del
   contenedor `America/Lima` (ENV TZ + `-Duser.timezone`). Versión **1.10.0**, versionCode 13.
-- **v1.11.0 (2026-09-09) = Multi-select Lotes/Plagas + Stock último L/J + Evidencia Aprobado + Fotos BYTEA**:
+- **v1.11.0 (2026-09-09) = Multi-select Lotes/Plagas + Stock último L/J + Evidencia Aprobado + Fotos BYTEA + Liberación por Lote**:
   selección múltiple de lotes y plagas con tablas pivote (V19 `requerimiento_lotes`,
   `requerimiento_plagas`), componente `MultiSelectField` con checkboxes y chips, stock disponible
   del último L o J (no mensual 5000), fotos deshabilitadas al crear requerimiento. Evidencia de
   entrega (cámara/galería) ahora también en estado **Aprobado**; botones "Ver Detalle" y "Acta PDF"
   eliminados; el detalle muestra todos los lotes/plagas. Fotos almacenadas como **bytes BYTEA en BD**
-  (migración V20, con fallback a disco para fotos legacy V11). Suite: **89 tests BE + 127 tests MO**.
+  (migración V20, con fallback a disco para fotos legacy V11). **Liberación por lote** (V21):
+  columna `liberado` en `requerimiento_lotes`, `papel_con_postura`/`sobre_con_cascarilla` por
+  liberación, flujo multi-estado admin/user (Screen 7/8/12/13). Suite: **89 tests BE + 127 tests MO**.
 - **Pendientes**: SSL Pinning para producción (HTTPS en VPS), frontend web (React/Vite) y CI/CD
   (GitHub Actions). Ver [`docs_implementacion/_sdd/`](docs_implementacion/_sdd/).
 
@@ -141,11 +143,12 @@ Para desarrollo local se usa PostgreSQL 16 en Docker. Los **parámetros de conex
 [`docker-compose.yml`](docker-compose.yml) (raíz) y en
 [`backend/src/main/resources/application.properties`](backend/src/main/resources/application.properties).
 Son credenciales de **desarrollo** y no se exponen en este README por seguridad; conéctate a la BD que
-levantan esos archivos desde tu gestor (pgAdmin/DBeaver/DataGrip). Las migraciones Flyway `V1..V20`
+levantan esos archivos desde tu gestor (pgAdmin/DBeaver/DataGrip). Las migraciones Flyway `V1..V21`
 crean toda la estructura: `usuarios`, `roles`, `fundos`, `variedades`, `lotes`, `etapas_fenologicas`,
 `plagas`, `nematodos`, `patrones`, `programaciones`, `requerimientos` (+ pivotes `requerimiento_lotes`
-y `requerimiento_plagas`), `fotos_requerimiento` (bytes BYTEA V20),
-`sync_log`, `cumplimiento_programacion`, `despachos`, `recepciones` y `liberaciones`.
+con `liberado` V21 y `requerimiento_plagas`), `fotos_requerimiento` (bytes BYTEA V20),
+`sync_log`, `cumplimiento_programacion`, `despachos`, `recepciones` y `liberaciones`
+(+ `papel_con_postura`/`sobre_con_cascarilla` V21).
 
 ## Verificación por capa
 

@@ -25,10 +25,15 @@ public class RequerimientoLote {
     @JoinColumn(name = "lote_id", nullable = false)
     private Lote lote;
 
+    @Column(name = "liberado", nullable = false)
+    private Boolean liberado = false;
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
     public Requerimiento getRequerimiento() { return requerimiento; }
     public void setRequerimiento(Requerimiento requerimiento) { this.requerimiento = requerimiento; }
     public Lote getLote() { return lote; }
     public void setLote(Lote lote) { this.lote = lote; }
+    public Boolean getLiberado() { return liberado; }
+    public void setLiberado(Boolean liberado) { this.liberado = liberado; }
 }

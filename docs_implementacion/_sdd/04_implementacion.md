@@ -10,9 +10,9 @@
 | Documento | 04_IMPLEMENTACION — Estado e historial de implementación |
 | Proyecto | Sistema de Control de Entrega de Insectos Benéficos |
 | Tipo Documento | SDD (historial de implementación) |
-| Estado | v1.7.0: módulo cumplimiento producción + fix V14; backend operativo en :6101; 150 tests / 26 suites, 0 failures; descarte offline documentado (§63) |
-| Versión | 1.7.0 / versionCode 10 |
-| Fecha | 2026-09-08 |
+| Estado | v1.11.1: fix stock source (cumplimiento_programacion.total_real), Screen 13 campos habilitados, Screen 12 auto-refresh; 89 tests BE, 127 tests MO |
+| Versión | 1.11.1 / versionCode 14 |
+| Fecha | 2026-09-10 |
 | Responsable | Orchestrator / Developer |
 | Repositorio | C:\repos\rep_entrega_insectos_beneficos |
 | Clasificación | Interno |
@@ -2798,3 +2798,144 @@ metadatos) para el módulo de fotos de requerimiento.
 > orden del helper.
 
 **Estado**: Implementado y verificado. Versión 1.11.0 / versionCode 14.
+
+---
+
+## 69. Liberación por Lote + Flujo Multi-Estado Admin/User (2026-09-10)
+
+**Objetivo**: implementar la liberación de insectos benéficos **por lote individual**
+dentro de un requerimiento, con un flujo multi-estado diferenciado para admin i+d
+y user sanidad.
+
+### 69.1 Backend — Migración V21 + cambios en LiberacionService
+
+**Migración V21** (`V21__liberacion_por_lote.sql`):
+- `ALTER TABLE requerimiento_lotes ADD COLUMN liberado BOOLEAN NOT NULL DEFAULT FALSE;`
+  — marca si un lote ya fue liberado dentro de un requerimiento.
+- `ALTER TABLE liberaciones ADD COLUMN papel_con_postura NUMERIC(10,2);`
+- `ALTER TABLE liberaciones ADD COLUMN sobre_con_cascarilla NUMERIC(10,2);`
+  — presentaciones entregadas por liberación (por lote).
+
+**RequerimientoLote.java**:
+- Nuevo campo `Boolean liberado = false` con `@Column(name = "liberado", nullable = false)`.
+
+**RequerimientoLoteRepository.java**:
+- `countByRequerimientoIdAndLiberadoFalse(Long)` — cuenta lotes pendientes.
+- `countByRequerimientoId(Long)` — cuenta total de lotes.
+
+**Liberacion.java**:
+- Campos `BigDecimal papelConPostura` / `sobreConCascarilla` con
+  `@Column(name = "papel_con_postura")` / `@Column(name = "sobre_con_cascarilla")`.
+
+**CrearLiberacionRequest.java** / **LiberacionDto.java**:
+- Campos `papelConPostura` / `sobreConCascarilla` agregados.
+
+**LiberacionMapper.java**:
+- Mapeo de `papelConPostura` / `sobreConCascarilla` al DTO.
+
+**LiberacionService.crear()** — Cambios clave:
+1. **Validación de estado**: cambia de `RECIBIDO` a `ENTREGADO` (V21).
+2. **Verificación de lote no liberado**: consulta `requerimiento_lotes` para
+   evitar doble liberación del mismo lote.
+3. **Marca lote como liberado**: `rl.setLiberado(true)` en la tabla pivote.
+4. **Auto-estado LIBERADO**: solo cambia a `LIBERADO` cuando **todos** los lotes
+   están liberados (no por cada liberación individual).
+5. **Papel/sobre por liberación**: almacena `papelConPostura`/`sobreConCascarilla`
+   en la tabla `liberaciones` (no a nivel de requerimiento).
+
+**RequerimientoDto.java** / **RequerimientoMapper.java**:
+- Campos `Integer lotesTotal` / `Integer lotesLiberados` calculados desde
+  `requerimientoLoteRepository.countByRequerimientoId()` y
+  `countByRequerimientoIdAndLiberadoFalse()`.
+- El mobile puede calcular "Por Liberar X de X" sin llamadas adicionales.
+
+### 69.2 Mobile — Flujo multi-estado
+
+**ApiClient.ts**:
+- `CrearLiberacionRequest`: campos `papelConPostura?` / `sobreConCascarilla?`.
+- `RequerimientoDto`: campos `lotesTotal` / `lotesLiberados`.
+
+**Navigation types.ts**:
+- `RequerimientoForm: {id?: number; readOnly?: boolean}` — nuevo parámetro
+  `readOnly` para modo solo lectura.
+
+**Screen 7 (RequerimientosListScreen)** — Cards admin dinámicas:
+- `REGISTRADO` → botón "Por Aprobar" + icono pencil
+- `APROBADO` → botón "Por Entregar" + icono pencil
+- `ENTREGADO` → botón "Revisar" + icono eye, navega con `readOnly: true`
+
+**Screen 8 (RequerimientoFormScreen)** — Modo readOnly:
+- `route.params.readOnly` desactiva todos los campos, oculta "Guardar".
+- Header cambia a "Detalle solicitud".
+- Papel/sobre, cámara/galería, estado — todos deshabilitados.
+
+**Screen 12 (HistorialRequerimientoScreen)** — Cards user dinámicas:
+- `APROBADO` → botón "Editar" (navega a EditarRequerimiento)
+- `ENTREGADO` → botón "Por Liberar X de X" (X = lotes pendientes)
+
+**Screen 13 (EditarRequerimientoScreen)** — Reescritura completa:
+- **APROBADO**: solo lectura, chip de estado, campos deshabilitados, sin "Guardar".
+- **ENTREGADO**: formulario de liberación por lote:
+  - Select de lote (único, solo lotes no liberados de `lotesNoLiberados`).
+  - Cantidad muestra la cantidad entregada (no editable).
+  - Papel/Sobre deshabilitados (valores del requerimiento padre).
+  - Plaga multi-select (deshabilitada, valor del requerimiento).
+  - Fecha/Hora de liberación (defaults del sistema, deshabilitados).
+  - Cámara/Galería habilitados (hasta 2 fotos).
+  - "Guardar liberación" → `crearLiberacion()` + upload fotos → `goBack()`.
+  - Alerta 30h (RN-035) se mantiene para estado RECIBIDO.
+
+### 69.3 Verificación
+
+| Comando | Resultado |
+|---|---|
+| `cd backend && mvn test` | 89 tests, 0 failures |
+| `cd mobile && npm run lint` | 0 errores (11 warnings pre-existentes) |
+| `cd mobile && npx tsc --noEmit` | TSC_OK |
+| `cd mobile && npm test -- --runInBand` | 127 tests / 22 suites, 0 failures |
+
+**Estado**: Implementado y verificado. Versión 1.11.0 / versionCode 14.
+
+---
+
+# 70. Fix stock source + Screen 13 campos habilitados (2026-09-10)
+
+## 70.1 Stock: cumplimiento_programacion.total_real
+
+**Problema**: `RequerimientoService.getStockDisponible()` consultaba `detalle_programaciones.stock_final`,
+que devolvía 0 cuando no existía un registro de cumplimiento para la fecha de corte.
+
+**Causa raíz**: Los tests creaban programación con `anio=2200/2300` pero `calcularFechaCorte()` retornaba
+una fecha en 2026 (L/J del mes actual), nunca coincidiendo.
+
+**Solución**:
+1. `getStockDisponible()` → `cumplimientoProgramacionRepository.findByEspecieAndFecha(especieId, fechaCorte)` → `totalReal`.
+2. Test helpers (`asegurarStockEspecie()`) ahora crean `cumplimiento_programacion` con `totalReal=5000` para
+   el L/J exacto del mes actual, usando la regla de día de semana (L/Mi/Mi→último lunes, J/V/S→último jueves).
+
+## 70.2 Screen 13: campos habilitados en ENTREGADO
+
+**Problema**: Los campos papel/sobre, plaga y fecha/hora estaban con `editable={false}` / `disabled` en modo
+liberación (ENTREGADO), impidiendo al usuario ingresar datos.
+
+**Solución**:
+- Papel/sobre: `editable={esModoLiberacion}` (habilitado solo en ENTREGADO).
+- Plaga: `disabled={!esModoLiberacion}` (habilitado solo en ENTREGADO).
+- Fecha/hora liberación: `editable={esModoLiberacion}`.
+- Defaults del sistema se pre-rellenan al cargar el requerimiento con estado ENTREGADO.
+
+## 70.3 Screen 12: auto-refresh al volver de Screen 13
+
+**Solución**: Se agregó `navigation.addListener('focus', ...)` en `HistorialRequerimientoScreen` para
+re-cargar los requerimientos cuando la pantalla recupera foco (después de editar/liberar en Screen 13).
+
+## 70.4 Verificación
+
+| Comando | Resultado |
+|---|---|
+| `cd backend && mvn test` | 89 tests, 0 failures |
+| `cd mobile && npm run lint` | 0 errores (11 warnings pre-existentes) |
+| `cd mobile && npx tsc --noEmit` | TSC_OK |
+| `cd mobile && npx jest HistorialRequerimientoScreen EditarRequerimientoScreen RequerimientosListScreen` | 10 tests, 0 failures |
+
+**Estado**: Implementado y verificado. Versión 1.11.1 / versionCode 14.

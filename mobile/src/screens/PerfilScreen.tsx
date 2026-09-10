@@ -107,7 +107,7 @@ export default function PerfilScreen() {
               <Text style={styles.avatarInitial}>{inicial}</Text>
             </View>
             <Text style={styles.name}>{user?.nombre ?? 'Usuario'}</Text>
-            <Text style={styles.profileLine}>DNI: {user?.dni ?? '—'}</Text>
+            {/* <Text style={styles.profileLine}>DNI: {user?.dni ?? '—'}</Text> */}
             <Text style={styles.profileLine}>Perfil: {user?.rol ?? '—'}</Text>
           </AppCard>
 
@@ -121,16 +121,16 @@ export default function PerfilScreen() {
               <Text style={styles.label}>Rol</Text>
               <Text style={styles.value}>{user?.rol ?? '—'}</Text>
             </View>
-            <View style={styles.row}>
+            {/* <View style={styles.row}>
               <Text style={styles.label}>DNI</Text>
               <Text style={styles.value}>{user?.dni ?? '—'}</Text>
-            </View>
+            </View> */}
           </AppCard>
 
           <AppCard>
-            <Text style={styles.section}>Aplicación</Text>
+            <Text style={styles.section}>Versionado de la Aplicación</Text>
             <View style={styles.row}>
-              <Text style={styles.value}>Versión {APP_VERSION}</Text>
+              <Text style={styles.value}>Versión: {APP_VERSION}</Text>
               <AppIconButton
                 name="history"
                 size={22}

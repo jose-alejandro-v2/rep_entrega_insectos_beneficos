@@ -171,6 +171,15 @@ export default function RequerimientosListScreen() {
       <View style={styles.list}>
         {reqs.map(r => {
           const info = estadoInfo(r.estado);
+          const botonLabel =
+            r.estado === 'REGISTRADO'
+              ? 'Por Aprobar'
+              : r.estado === 'APROBADO'
+              ? 'Por Entregar'
+              : r.estado === 'ENTREGADO'
+              ? 'Revisar'
+              : 'Editar';
+          const esReadOnly = r.estado === 'ENTREGADO';
           return (
           <AppCard key={r.id} style={[styles.card, info.bg ? {backgroundColor: info.bg} : undefined]}>
             <View style={styles.cardHeader}>
@@ -184,13 +193,16 @@ export default function RequerimientosListScreen() {
             </View>
             <View style={styles.cardActions}>
               <AppButton
-                label="Editar"
+                label={botonLabel}
                 variant="text"
-                icon="pencil-outline"
+                icon={esReadOnly ? 'eye-outline' : 'pencil-outline'}
                 onPress={() =>
-                  navigation.navigate('RequerimientoForm', {id: r.id})
+                  navigation.navigate('RequerimientoForm', {
+                    id: r.id,
+                    readOnly: esReadOnly,
+                  })
                 }
-                accessibilityLabel={`Editar ${r.especie}`}
+                accessibilityLabel={`${botonLabel} ${r.especie}`}
               />
             </View>
           </AppCard>

@@ -16,6 +16,8 @@ public class LiberacionMapper {
         dto.setLoteNombre(l.getLote() != null ? l.getLote().getNombre() : null);
         dto.setCantidadLiberada(l.getCantidadLiberada());
         dto.setObservaciones(l.getObservaciones());
+        dto.setPapelConPostura(l.getPapelConPostura());
+        dto.setSobreConCascarilla(l.getSobreConCascarilla());
         dto.setFechaLiberacion(l.getFechaLiberacion());
         dto.setHoraLiberacion(l.getHoraLiberacion());
         dto.setCreadoPor(l.getCreadoPor());

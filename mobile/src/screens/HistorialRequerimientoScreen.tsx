@@ -212,11 +212,19 @@ export default function HistorialRequerimientoScreen() {
     [user],
   );
 
-  // Auto-cargar con fechas por defecto (lunes→hoy de la semana en curso)
+  // Auto-cargar con fechas por defecto; refrescar al volver de Screen 13 (via focus listener)
   /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     cargar(desdeTexto || null, hastaTexto || null);
   }, [cargar]);
+
+  // Refrescar cuando la pantalla recupera foco (después de editar/liberar en Screen 13)
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      cargar(desdeTexto || null, hastaTexto || null);
+    });
+    return unsubscribe;
+  }, [navigation, cargar, desdeTexto, hastaTexto]);
 
   const aplicarFiltro = () => {
     const desdeISO = desdeTexto || lunesSemanaActual();
@@ -291,7 +299,13 @@ export default function HistorialRequerimientoScreen() {
     }
     return (
       <View style={styles.list}>
-        {reqs.map(r => (
+        {reqs.map(r => {
+          const lotesPendientes = (r.lotes?.length ?? 0) - (r.lotesLiberados ?? 0);
+          const botonLabel =
+            r.estado === 'ENTREGADO'
+              ? `Por Liberar ${lotesPendientes} de ${r.lotes?.length ?? 0}`
+              : 'Editar';
+          return (
           <AppCard key={r.id} style={styles.card}>
             <View style={styles.cardHeader}>
               <View style={styles.cardTitle}>
@@ -313,17 +327,18 @@ export default function HistorialRequerimientoScreen() {
                 accessibilityLabel={`Ver ${r.especie}`}
               />
               <AppButton
-                label="Editar"
+                label={botonLabel}
                 variant="text"
                 icon="pencil-outline"
                 onPress={() =>
                   navigation.navigate('EditarRequerimiento', {id: r.id})
                 }
-                accessibilityLabel={`Editar ${r.especie}`}
+                accessibilityLabel={`${botonLabel} ${r.especie}`}
               />
             </View>
           </AppCard>
-        ))}
+          );
+        })}
       </View>
     );
   };

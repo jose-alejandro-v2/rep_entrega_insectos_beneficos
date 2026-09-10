@@ -15,4 +15,12 @@ public class CumplimientoProgramacionRepository implements PanacheRepository<Cum
     public Optional<CumplimientoProgramacion> findByDetalleId(Long detalleId) {
         return find("programacionDetalle.id = ?1", detalleId).firstResultOptional();
     }
+
+    /**
+     * Busca el total_real del cumplimiento para una especie en una fecha específica (V21 stock fix).
+     * Relación: cumplimiento_programacion → programacion → especie.
+     */
+    public Optional<CumplimientoProgramacion> findByEspecieAndFecha(Long especieId, java.time.LocalDate fecha) {
+        return find("programacion.especie.id = ?1 AND fecha = ?2", especieId, fecha).firstResultOptional();
+    }
 }

@@ -25,7 +25,7 @@ export type RootStackParamList = {
    *    (Screen 13, user sanidad).
    */
   RequerimientosList: undefined;
-  RequerimientoForm: {id?: number};
+  RequerimientoForm: {id?: number; readOnly?: boolean};
   EditarRequerimiento: {id: number};
   Programacion: undefined;
   /**

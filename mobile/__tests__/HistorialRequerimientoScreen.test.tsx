@@ -37,7 +37,7 @@ jest.mock('@react-navigation/native', () => {
   const actual = jest.requireActual('@react-navigation/native');
   return {
     ...actual,
-    useNavigation: jest.fn(() => ({navigate: jest.fn(), goBack: jest.fn()})),
+    useNavigation: jest.fn(() => ({navigate: jest.fn(), goBack: jest.fn(), addListener: jest.fn(() => jest.fn())})),
   };
 });
 
@@ -111,6 +111,7 @@ async function renderHistorial() {
   (useNavigation as unknown as jest.Mock).mockReturnValue({
     goBack: jest.fn(),
     navigate: jest.fn(),
+    addListener: jest.fn(() => jest.fn()),
   });
 
   api.get.mockImplementation((url: string, _config?: any) => {

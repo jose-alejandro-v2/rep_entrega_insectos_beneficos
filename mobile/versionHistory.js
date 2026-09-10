@@ -6,6 +6,15 @@
 
 const versionHistory = [
   {
+    version: '1.11.1',
+    fecha: '2026-09-10',
+    cambios: [
+      'Fix stock source: ahora consulta cumplimiento_programacion.total_real (antes detalle_programaciones.stock_final).',
+      'Screen 13 (ENTREGADO): campos papel/sobre, plaga multi-select y fecha/hora habilitados con defaults del sistema.',
+      'Screen 12: auto-refresh al volver de edición (focus listener).',
+    ],
+  },
+  {
     version: '1.11.0',
     fecha: '2026-09-09',
     cambios: [
@@ -18,6 +27,11 @@ const versionHistory = [
       'Botón "Ver Detalle" eliminado del historial (redundante) y botón "Acta PDF" eliminado del formulario admin.',
       'El detalle de requerimiento (historial, edición y detalle) ahora muestra todos los lotes y plagas seleccionados.',
       'Fotos almacenadas como bytes en la base de datos (BYTEA, migración V20) en lugar de archivos en disco; las fotos legacy V11 siguen soportadas.',
+      'Liberación por lote (V21): columna liberado en requerimiento_lotes, papel/sobre por liberación en liberaciones.',
+      'Screen 7 (admin): botones dinámicos "Por Aprobar" / "Por Entregar" / "Revisar" según estado.',
+      'Screen 8 (admin): modo readOnly para estado ENTREGADO (vista de detalle sin edición).',
+      'Screen 12 (user): botón dinámico "Por Liberar X de X" para estado ENTREGADO.',
+      'Screen 13 (user): reescritura completa — APROBADO solo lectura, ENTREGADO formulario de liberación por lote.',
     ],
   },
   {
