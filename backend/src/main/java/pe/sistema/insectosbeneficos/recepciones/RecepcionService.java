@@ -66,8 +66,8 @@ public class RecepcionService {
         rec.setCreatedAt(Instant.now());
         recepcionRepository.persist(rec);
 
-        // RF-076: cambiar estado del requerimiento a RECIBIDO
-        r.setEstado("RECIBIDO");
+        // V22/Opción B: la recepción NO cambia el estado (queda ENTREGADO).
+        // El estado pasa a LIBERADO directamente al liberar todos los lotes.
         r.setUpdatedAt(Instant.now());
         requerimientoRepository.persist(r);
 

@@ -4,18 +4,22 @@
  *
  * Comportamiento por estado:
  *  - APROBADO: todos los campos deshabilitados, sin botón Guardar (solo lectura).
- *  - ENTREGADO: formulario de liberación por lote (solo lectura):
- *    · Select de lote (único, solo lotes no liberados, deshabilitado).
- *    · Cantidad muestra la cantidad entregada (no editable).
- *    · Papel/Sobre deshabilitados (valores del requerimiento padre).
- *    · Plaga multi-select (deshabilitada, valor del requerimiento).
- *    · Fecha/Hora de liberación (defaults del sistema, deshabilitados).
- *    · Fotos: "Foto de Entrega" (izq) + "Foto de Liberación" (der), sin cámara/galería.
- *    · Guardar → llama crearLiberacion → vuelve a Screen 12.
+ *  - ENTREGADO: formulario de liberación por lote (campos editables):
+ *    · Select de lote (único, solo lotes no liberados).
+ *    · Cantidad muestra el PENDIENTE por liberar (cantidad pedida − Σ papel+sobre
+ *      de las liberaciones ya registradas), no editable (v1.12.0).
+ *    · Papel/Sobre editables con defaults del restante por presentación.
+ *    · Plaga multi-select (habilitada, permite 1..N).
+ *    · Fecha/Hora de liberación (defaults del sistema, editables).
+ *    · Fotos: "Foto de Entrega" (izq, fetch con auth) + "Foto de Liberación" (der, cámara/galería).
+ *    · Guardar → llama crearLiberacion + sube fotos → vuelve a Screen 12.
  *
  * Notas:
  *  - Botón "Acta PDF" eliminado (evidencia = imagen).
  *  - Alerta 30h (RN-035) se muestra si pasaron >30h sin liberación.
+ *  - V22: campos habilitados, plagas persitidas, fechaLiberacion editable.
+ *  - v1.12.0: la `cantidadLiberada` persistida es papel + sobre de ESA liberación
+ *    y ese total se descuenta del pendiente de la siguiente liberación.
  */
 
 import React, {useCallback, useEffect, useRef, useState} from 'react';
@@ -34,6 +38,7 @@ import type {RouteProp} from '@react-navigation/native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import AppButton from '../components/AppButton';
 import AppHeader from '../components/AppHeader';
+import AppIconButton from '../components/AppIconButton';
 import AppInput from '../components/AppInput';
 import DateTimePickerField from '../components/DateTimePickerField';
 import ErrorBoundary from '../components/ErrorBoundary';
@@ -47,18 +52,23 @@ import type {RootStackParamList} from '../navigation/types';
 import {
   crearLiberacion,
   extractErrorMessage,
-  getFotoUrl,
+  fetchFotoBinaria,
   listarFotosRequerimiento,
   listarLiberaciones,
   obtenerRequerimiento,
+  subirFotoRequerimiento,
   type FotoRequerimientoDto,
+  type LiberacionDto,
 } from '../services/ApiClient';
 import {theme} from '../theme';
 import {
   cantidadDesdeTexto,
   horaActual,
+  pendienteLiberacion,
   requiereAlertaLiberacion,
+  restantePresentaciones,
   toISODate,
+  validarPresentacionesVsPendiente,
 } from '../utils/requerimientos';
 import RequerimientoStatusChip from '../components/RequerimientoStatusChip';
 import {formatFecha} from '../utils/programacion';
@@ -77,6 +87,9 @@ export default function EditarRequerimientoScreen() {
   const catalogo = useRequerimientosCatalogos();
   const {
     fotos,
+    fotoError,
+    tomarFoto,
+    seleccionarFoto,
   } = usePhotoCapture(MAX_PHOTOS);
 
   const [fechaInput, setFechaInput] = useState('');
@@ -85,9 +98,9 @@ export default function EditarRequerimientoScreen() {
   const [plagasIds, setPlagasIds] = useState<number[]>([]);
   const [observaciones, setObservaciones] = useState('');
   const [estado, setEstado] = useState<string>('REGISTRADO');
-  const [fotosExistentes, setFotosExistentes] = useState<Array<{foto: FotoRequerimientoDto; url: string}>>([]);
+  const [fotosExistentes, setFotosExistentes] = useState<Array<{foto: FotoRequerimientoDto; dataUri: string}>>([]);
 
-  // V21: campos de liberación por lote
+  // V21/V22: campos de liberación por lote
   const [loteLiberacionId, setLoteLiberacionId] = useState<number | null>(null);
   const [papelTexto, setPapelTexto] = useState('');
   const [sobreTexto, setSobreTexto] = useState('');
@@ -103,7 +116,7 @@ export default function EditarRequerimientoScreen() {
 
   // Derivar modo desde el estado
   const esSoloLectura = estado === 'APROBADO';
-  const esModoLiberacion = estado === 'ENTREGADO';
+  const esModoLiberacion = estado === 'ENTREGADO' || estado === 'LIBERADO';
 
   // Rellena fecha/hora de liberación al agregar una foto (RN-036).
   const prevFotoCount = useRef(fotos.length);
@@ -122,54 +135,58 @@ export default function EditarRequerimientoScreen() {
       const r = await obtenerRequerimiento(id);
       setFechaInput(r.fecha);
       setFundoId(r.fundoId);
-      setCantidadTexto(String(r.cantidad));
       setPlagasIds((r.plagas ?? []).map(p => p.id));
       setObservaciones(r.observaciones ?? '');
       setEstado(r.estado);
       setAlerta30(requiereAlertaLiberacion(r));
 
-      // V21: cargar papel/sobre del requerimiento (valores del admin al marcar ENTREGADO)
-      if (r.papelConPostura != null) {
-        setPapelTexto(String(r.papelConPostura));
-      }
-      if (r.sobreConCascarilla != null) {
-        setSobreTexto(String(r.sobreConCascarilla));
-      }
-
-      // V21: si ENTREGADO, pre-llenar fecha/hora de liberación con defaults del sistema
-      if (r.estado === 'ENTREGADO') {
-        setFechaLiberacionInput(toISODate(new Date()));
-        setHoraLiberacion(horaActual());
-      }
-
-      // V21: si ENTREGADO, calcular lotes no liberados
-      if (r.estado === 'ENTREGADO' && r.lotes && r.lotes.length > 0) {
+      // V21/V22: si ENTREGADO o LIBERADO, cargar las liberaciones registradas
+      // (base del pendiente por liberar y de los defaults de papel/sobre).
+      let liberaciones: LiberacionDto[] = [];
+      if (r.estado === 'ENTREGADO' || r.estado === 'LIBERADO') {
         try {
-          const liberaciones = await listarLiberaciones(id);
-          const liberadosIds = new Set(liberaciones.map(l => l.loteId));
-          const noLiberados = r.lotes.filter(l => !liberadosIds.has(l.id));
-          setLotesNoLiberados(noLiberados);
-          if (noLiberados.length > 0) {
-            setLoteLiberacionId(noLiberados[0].id);
-          }
+          liberaciones = await listarLiberaciones(id);
         } catch {
-          setLotesNoLiberados(r.lotes);
-          if (r.lotes.length > 0) {
-            setLoteLiberacionId(r.lotes[0].id);
-          }
+          liberaciones = [];
         }
       }
 
-      // Cargar fotos desde servidor
+      // v1.12.0: la cantidad mostrada es el PENDIENTE por liberar
+      // (cantidad pedida − Σ papel+sobre de las liberaciones ya registradas).
+      setCantidadTexto(String(pendienteLiberacion(r.cantidad, liberaciones)));
+
+      // v1.12.0: defaults de papel/sobre = restante por presentación.
+      const restante = restantePresentaciones(r, liberaciones);
+      setPapelTexto(restante.papel > 0 ? String(restante.papel) : '');
+      setSobreTexto(restante.sobre > 0 ? String(restante.sobre) : '');
+
+      // V21/V22: si ENTREGADO o LIBERADO, pre-llenar fecha/hora de liberación con defaults del sistema
+      if (r.estado === 'ENTREGADO' || r.estado === 'LIBERADO') {
+        setFechaLiberacionInput(prev => prev || toISODate(new Date()));
+        setHoraLiberacion(prev => prev || horaActual());
+      }
+
+      // V21: si ENTREGADO o LIBERADO, calcular lotes no liberados (un lote ya
+      // liberado no vuelve a ofrecerse en el select "Lote a liberar").
+      if ((r.estado === 'ENTREGADO' || r.estado === 'LIBERADO') && r.lotes && r.lotes.length > 0) {
+        const liberadosIds = new Set(liberaciones.map(l => l.loteId));
+        const noLiberados = r.lotes.filter(l => !liberadosIds.has(l.id));
+        setLotesNoLiberados(noLiberados);
+        if (noLiberados.length > 0) {
+          setLoteLiberacionId(noLiberados[0].id);
+        }
+      }
+
+      // Cargar fotos desde servidor (fetch con autenticación para que <Image> las muestre)
       try {
         const fotosServer = await listarFotosRequerimiento(id);
-        const fotosConUrl = await Promise.all(
+        const fotosConDataUri = await Promise.all(
           fotosServer.map(async f => ({
             foto: f,
-            url: await getFotoUrl(id, f.id),
+            dataUri: await fetchFotoBinaria(id, f.id),
           })),
         );
-        setFotosExistentes(fotosConUrl);
+        setFotosExistentes(fotosConDataUri);
       } catch {
         setFotosExistentes([]);
       }
@@ -184,9 +201,18 @@ export default function EditarRequerimientoScreen() {
     cargarRequerimiento();
   }, [cargarRequerimiento]);
 
-  // V21: guardar liberación (solo ENTREGADO)
+  // v1.12.0: pendiente por liberar (valor mostrado en "Cantidad (millares)") y
+  // presentaciones digitadas por el usuario; su suma se descuenta del pendiente.
+  const pendiente = cantidadDesdeTexto(cantidadTexto);
+  const papelNum = cantidadDesdeTexto(papelTexto);
+  const sobreNum = cantidadDesdeTexto(sobreTexto);
+  const presentacionesError = esModoLiberacion
+    ? validarPresentacionesVsPendiente(papelNum, sobreNum, pendiente)
+    : null;
+
+  // V21/V22: guardar liberación (solo ENTREGADO)
   const guardarLiberacion = async () => {
-    if (!esModoLiberacion || loteLiberacionId == null) {
+    if (!esModoLiberacion || loteLiberacionId == null || presentacionesError != null) {
       return;
     }
     setSaving(true);
@@ -196,12 +222,29 @@ export default function EditarRequerimientoScreen() {
       await crearLiberacion(id, {
         fundoId: fundoParaLiberacion,
         loteId: loteLiberacionId,
-        cantidadLiberada: cantidadDesdeTexto(cantidadTexto),
-        papelConPostura: cantidadDesdeTexto(papelTexto) || undefined,
-        sobreConCascarilla: cantidadDesdeTexto(sobreTexto) || undefined,
+        // v1.12.0: cantidad liberada = papel + sobre de ESTA liberación
+        cantidadLiberada: papelNum + sobreNum,
+        papelConPostura: papelNum || undefined,
+        sobreConCascarilla: sobreNum || undefined,
         horaLiberacion: horaLiberacion || horaActual(),
+        fechaLiberacion: fechaLiberacionInput || toISODate(new Date()),
+        plagas: plagasIds.length > 0 ? plagasIds : undefined,
         observaciones: observaciones.trim() || undefined,
       });
+
+      // Subir fotos de liberación (RN-009: al menos 1)
+      for (const foto of fotos) {
+        try {
+          await subirFotoRequerimiento(id, {
+            uri: foto.uri,
+            type: foto.type,
+            name: foto.fileName,
+          }, JSON.stringify({tipo: 'LIBERACION'}));
+        } catch {
+          // Silenciar — se reintenta en el próximo guardado
+        }
+      }
+
       navigation.goBack();
     } catch (e) {
       setSaveError(extractErrorMessage(e));
@@ -300,7 +343,6 @@ export default function EditarRequerimientoScreen() {
                         value={lotesNoLiberados.find(l => l.id === loteLiberacionId)?.nombre ?? ''}
                         options={opcionesLote}
                         onSelect={v => setLoteLiberacionId(Number(v))}
-                        disabled
                       />
                     )}
 
@@ -310,7 +352,6 @@ export default function EditarRequerimientoScreen() {
                       value={papelTexto}
                       onChangeText={setPapelTexto}
                       keyboardType="number-pad"
-                      editable={false}
                       maxLength={6}
                       accessibilityLabel="Papel con postura"
                     />
@@ -319,10 +360,17 @@ export default function EditarRequerimientoScreen() {
                       value={sobreTexto}
                       onChangeText={setSobreTexto}
                       keyboardType="number-pad"
-                      editable={false}
                       maxLength={6}
                       accessibilityLabel="Sobre con cascarilla"
                     />
+
+                    {presentacionesError ? (
+                      <Text
+                        accessibilityRole="alert"
+                        style={styles.validacionError}>
+                        {presentacionesError}
+                      </Text>
+                    ) : null}
 
                     <Text style={styles.subtitulo}>Plaga objetivo</Text>
                     <MultiSelectField
@@ -332,7 +380,6 @@ export default function EditarRequerimientoScreen() {
                       selectedValues={plagasIds}
                       options={opcionesPlaga}
                       onSelect={setPlagasIds}
-                      disabled
                     />
 
                     <DateTimePickerField
@@ -341,7 +388,6 @@ export default function EditarRequerimientoScreen() {
                       mode="date"
                       onChange={setFechaLiberacionInput}
                       onClear={() => setFechaLiberacionInput('')}
-                      editable={false}
                       accessibilityLabel="Fecha de liberación"
                     />
                     <DateTimePickerField
@@ -350,7 +396,6 @@ export default function EditarRequerimientoScreen() {
                       mode="time"
                       onChange={setHoraLiberacion}
                       onClear={() => setHoraLiberacion('')}
-                      editable={false}
                       accessibilityLabel="Hora de liberación"
                     />
 
@@ -359,10 +404,10 @@ export default function EditarRequerimientoScreen() {
                         <Text style={styles.fotoTitulo}>Foto de Entrega</Text>
                         {fotosExistentes.length > 0 ? (
                           <View style={styles.fotoPreviews}>
-                            {fotosExistentes.map(({foto, url}, idx) => (
+                            {fotosExistentes.map(({foto, dataUri}, idx) => (
                               <View key={String(foto.id)} style={styles.fotoPreview}>
                                 <Image
-                                  source={{uri: url}}
+                                  source={{uri: dataUri}}
                                   style={styles.fotoImagen}
                                 />
                                 <Text style={styles.fotoPreviewText}>Entrega {idx + 1}</Text>
@@ -387,6 +432,23 @@ export default function EditarRequerimientoScreen() {
                         ) : (
                           <Text style={styles.ayuda}>Sin foto de liberación</Text>
                         )}
+                        <View style={styles.fotoAcciones}>
+                          <AppIconButton
+                            name="camera-outline"
+                            accessibilityLabel="Tomar foto de liberación"
+                            onPress={tomarFoto}
+                            disabled={fotos.length >= MAX_PHOTOS}
+                          />
+                          <AppIconButton
+                            name="image-outline"
+                            accessibilityLabel="Seleccionar foto de liberación"
+                            onPress={seleccionarFoto}
+                            disabled={fotos.length >= MAX_PHOTOS}
+                          />
+                        </View>
+                        {fotoError ? (
+                          <Text style={styles.fotoError}>{fotoError}</Text>
+                        ) : null}
                       </View>
                     </View>
 
@@ -408,7 +470,12 @@ export default function EditarRequerimientoScreen() {
                       label="Guardar liberación"
                       icon="content-save-outline"
                       loading={saving}
-                      disabled={loteLiberacionId == null || lotesNoLiberados.length === 0}
+                      disabled={
+                        loteLiberacionId == null ||
+                        lotesNoLiberados.length === 0 ||
+                        fotos.length === 0 ||
+                        presentacionesError != null
+                      }
                       onPress={guardarLiberacion}
                       accessibilityLabel="Guardar liberación"
                     />
@@ -520,6 +587,14 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.body2.fontFamily,
     fontSize: theme.typography.body2.fontSize,
     marginBottom: theme.spacing[2],
+  },
+  /** Validación de presentaciones vs pendiente por liberar (v1.12.0). */
+  validacionError: {
+    fontFamily: theme.typography.body2.fontFamily,
+    fontSize: theme.typography.body2.fontSize,
+    lineHeight: theme.typography.body2.lineHeight,
+    color: theme.colors.status.error,
+    marginBottom: theme.spacing[3],
   },
   fotoPreview: {
     width: 112,

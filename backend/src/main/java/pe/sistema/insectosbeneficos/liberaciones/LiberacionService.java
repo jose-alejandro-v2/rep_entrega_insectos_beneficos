@@ -8,6 +8,8 @@ import pe.sistema.insectosbeneficos.catalogos.Fundo;
 import pe.sistema.insectosbeneficos.catalogos.FundoRepository;
 import pe.sistema.insectosbeneficos.catalogos.Lote;
 import pe.sistema.insectosbeneficos.catalogos.LoteRepository;
+import pe.sistema.insectosbeneficos.catalogos.Plaga;
+import pe.sistema.insectosbeneficos.catalogos.PlagaRepository;
 import pe.sistema.insectosbeneficos.liberaciones.dto.CrearLiberacionRequest;
 import pe.sistema.insectosbeneficos.liberaciones.dto.LiberacionDto;
 import pe.sistema.insectosbeneficos.requerimientos.Requerimiento;
@@ -54,6 +56,9 @@ public class LiberacionService {
     LoteRepository loteRepository;
 
     @Inject
+    PlagaRepository plagaRepository;
+
+    @Inject
     LiberacionMapper mapper;
 
     @Inject
@@ -71,11 +76,12 @@ public class LiberacionService {
                 .orElseThrow(() -> new ApiException(Response.Status.NOT_FOUND,
                         "REQUERIMIENTO_NO_ENCONTRADO", "Requerimiento no encontrado"));
 
-        // V21: solo se puede liberar un requerimiento en estado ENTREGADO
-        if (!"ENTREGADO".equals(r.getEstado())) {
+        // V21/V22/Opción B: solo se puede liberar un requerimiento en estado ENTREGADO o LIBERADO
+        // (la recepción NO cambia el estado; la liberación pasa directo de ENTREGADO a LIBERADO)
+        if (!"ENTREGADO".equals(r.getEstado()) && !"LIBERADO".equals(r.getEstado())) {
             throw new ApiException(Response.Status.BAD_REQUEST,
                     "ESTADO_NO_VALIDO",
-                    "Solo se pueden liberar requerimientos en estado ENTREGADO");
+                    "Solo se pueden liberar requerimientos en estado ENTREGADO o LIBERADO");
         }
 
         // RN-011: la cantidad liberada no puede superar la cantidad del requerimiento
@@ -102,7 +108,7 @@ public class LiberacionService {
                     "Este lote ya fue liberado anteriormente");
         }
 
-        // Crear la liberación (RN-010, RF-083: fecha/hora automática)
+        // Crear la liberación (RN-010, RF-083: fecha/hora automática o del request)
         Liberacion lib = new Liberacion();
         lib.setRequerimiento(r);
         lib.setFundo(fundo);
@@ -111,10 +117,32 @@ public class LiberacionService {
         lib.setObservaciones(req.getObservaciones());
         lib.setPapelConPostura(req.getPapelConPostura());
         lib.setSobreConCascarilla(req.getSobreConCascarilla());
-        lib.setFechaLiberacion(Instant.now());
+
+        // V22: fecha de liberación del request o automática
+        if (req.getFechaLiberacion() != null && req.getFechaLiberacion().length() >= 10) {
+            LocalDate fecha = LocalDate.parse(req.getFechaLiberacion().substring(0, 10));
+            LocalTime hora = LocalTime.parse(req.getHoraLiberacion());
+            lib.setFechaLiberacion(fecha.atTime(hora)
+                    .atZone(ZoneId.of("America/Lima"))
+                    .toInstant());
+        } else {
+            lib.setFechaLiberacion(Instant.now());
+        }
+
         lib.setHoraLiberacion(req.getHoraLiberacion());
         lib.setCreadoPor(actualUsuario.getId());
         lib.setCreatedAt(Instant.now());
+
+        // V22: persistir plagas asociadas a la liberación
+        if (req.getPlagas() != null && !req.getPlagas().isEmpty()) {
+            List<Plaga> plagas = req.getPlagas().stream()
+                    .map(pid -> plagaRepository.findByIdOptional(pid)
+                            .orElseThrow(() -> new ApiException(Response.Status.NOT_FOUND,
+                                    "PLAGA_NO_ENCONTRADA", "Plaga no encontrada: " + pid)))
+                    .collect(Collectors.toList());
+            lib.setPlagas(plagas);
+        }
+
         liberacionRepository.persist(lib);
 
         // V21: marcar el lote como liberado en la tabla pivote
@@ -132,7 +160,7 @@ public class LiberacionService {
         if (todosLiberados) {
             r.setEstado("LIBERADO");
         }
-        r.setFechaLiberacion(Instant.now());
+        r.setFechaLiberacion(lib.getFechaLiberacion());
         r.setHoraLiberacion(req.getHoraLiberacion());
         r.setUpdatedAt(Instant.now());
         requerimientoRepository.persist(r);

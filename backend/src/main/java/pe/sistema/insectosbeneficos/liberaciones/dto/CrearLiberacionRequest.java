@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 /**
  * Request para registrar una liberación en campo (HITO-015 / RF-080..086).
@@ -31,6 +32,10 @@ public class CrearLiberacionRequest {
     @NotBlank(message = "La hora de liberación es requerida")
     private String horaLiberacion;
 
+    private String fechaLiberacion;
+
+    private List<Long> plagas;
+
     public Long getFundoId() { return fundoId; }
     public void setFundoId(Long fundoId) { this.fundoId = fundoId; }
 
@@ -51,4 +56,10 @@ public class CrearLiberacionRequest {
 
     public BigDecimal getSobreConCascarilla() { return sobreConCascarilla; }
     public void setSobreConCascarilla(BigDecimal sobreConCascarilla) { this.sobreConCascarilla = sobreConCascarilla; }
+
+    public String getFechaLiberacion() { return fechaLiberacion; }
+    public void setFechaLiberacion(String fechaLiberacion) { this.fechaLiberacion = fechaLiberacion; }
+
+    public List<Long> getPlagas() { return plagas; }
+    public void setPlagas(List<Long> plagas) { this.plagas = plagas; }
 }

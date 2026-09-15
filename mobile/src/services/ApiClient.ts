@@ -876,6 +876,41 @@ export async function getFotoUrl(
   return `${baseUrl}/requerimientos/${requerimientoId}/fotos/${fotoId}/imagen`;
 }
 
+/**
+ * Descarga la imagen de una foto como data URI (con autenticación JWT).
+ *解决了 RN <Image> no envía Authorization header → 401 en endpoint protegido.
+ */
+export async function fetchFotoBinaria(
+  requerimientoId: number,
+  fotoId: number,
+): Promise<string> {
+  const url = await getFotoUrl(requerimientoId, fotoId);
+  const res = await api.get(url, {responseType: 'arraybuffer'});
+  const base64 = arrayBufferToBase64(res.data);
+  const contentType = res.headers?.['content-type'] || 'image/jpeg';
+  return `data:${contentType};base64,${base64}`;
+}
+
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  let result = '';
+  for (let i = 0; i < binary.length; i += 3) {
+    const b1 = binary.charCodeAt(i);
+    const b2 = i + 1 < binary.length ? binary.charCodeAt(i + 1) : 0;
+    const b3 = i + 2 < binary.length ? binary.charCodeAt(i + 2) : 0;
+    result += chars[(b1 >> 2) & 0x3f];
+    result += chars[((b1 & 0x3) << 4) | ((b2 >> 4) & 0xf)];
+    result += i + 1 < binary.length ? chars[((b2 & 0xf) << 2) | ((b3 >> 6) & 0x3)] : '=';
+    result += i + 2 < binary.length ? chars[b3 & 0x3f] : '=';
+  }
+  return result;
+}
+
 /* ------------------------------------------------------------------ */
 /* Cumplimiento de producción (HITO-014)                                */
 /* ------------------------------------------------------------------ */
@@ -973,7 +1008,7 @@ export interface ConfirmarRecepcionRequest {
   observaciones?: string | null;
 }
 
-/** Liberación de insectos en el fundo/lote destino (HITO-015 / MOD-08). */
+/** Liberación de insectos en el fundo/lote destino (HITO-015 / MOD-08 / V22). */
 export interface LiberacionDto {
   id: number;
   requerimientoId: number;
@@ -983,14 +1018,17 @@ export interface LiberacionDto {
   loteNombre: string;
   cantidadLiberada: number;
   observaciones: string | null;
+  papelConPostura: number | null;
+  sobreConCascarilla: number | null;
   fechaLiberacion: string;
   horaLiberacion: string;
   creadoPor: number;
   creadoPorNombre: string;
   createdAt: string;
+  plagas?: Array<{id: number; nombre: string}>;
 }
 
-/** Request para registrar una liberación en campo (RF-080..086 / V21). */
+/** Request para registrar una liberación en campo (RF-080..086 / V21 / V22). */
 export interface CrearLiberacionRequest {
   fundoId: number;
   loteId: number;
@@ -999,6 +1037,8 @@ export interface CrearLiberacionRequest {
   sobreConCascarilla?: number | null;
   observaciones?: string | null;
   horaLiberacion: string;
+  fechaLiberacion?: string | null;
+  plagas?: number[];
 }
 
 /** GET /api/v1/requerimientos/{id}/despachos — lista despachos de un requerimiento. */

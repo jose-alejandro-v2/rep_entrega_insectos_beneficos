@@ -10,9 +10,9 @@
 | Documento | 04_IMPLEMENTACION — Estado e historial de implementación |
 | Proyecto | Sistema de Control de Entrega de Insectos Benéficos |
 | Tipo Documento | SDD (historial de implementación) |
-| Estado | v1.11.1: fix stock source (cumplimiento_programacion.total_real), Screen 13 campos habilitados, Screen 12 auto-refresh; 89 tests BE, 127 tests MO |
-| Versión | 1.11.1 / versionCode 14 |
-| Fecha | 2026-09-10 |
+| Estado | v1.12.0: liberación parcial acumulada (mobile) + plagas por liberación y fechaLiberacion (backend V22); 95 tests BE (0 fallas), 144 tests MO (132 pass / 12 pre-existentes) |
+| Versión | 1.12.0 / versionCode 16 |
+| Fecha | 2026-09-14 |
 | Responsable | Orchestrator / Developer |
 | Repositorio | C:\repos\rep_entrega_insectos_beneficos |
 | Clasificación | Interno |
@@ -2939,3 +2939,131 @@ re-cargar los requerimientos cuando la pantalla recupera foco (después de edita
 | `cd mobile && npx jest HistorialRequerimientoScreen EditarRequerimientoScreen RequerimientosListScreen` | 10 tests, 0 failures |
 
 **Estado**: Implementado y verificado. Versión 1.11.1 / versionCode 14.
+---
+
+## 71. v1.12.0 — Liberación parcial acumulada (pendiente por liberar)
+
+**Pedido del usuario** (perfil usuario/sanidad): al registrar una liberación parcial de un
+requerimiento con varios lotes, la cantidad que se muestra al volver a "Liberar Requerimiento"
+debe ser el **remanente**, no el total pedido.
+
+**Ejemplo validado**: requerimiento de 140 millares con 2 lotes; en la liberación del lote 1 el
+usuario registra 60 (papel) + 20 (sobre) → al reingresar (botón "Por Liberar 1 de 2") la cantidad
+mostrada es 60 y los campos papel/sobre se pre-llenan con 40 y 20.
+
+### Decisiones cerradas (respuestas del usuario)
+
+| # | Decisión |
+|---|---|
+| 1 | `cantidadLiberada` persistida = `papelConPostura + sobreConCascarilla` de ESA liberación (opción A) |
+| 2 | Defaults de papel/sobre = restante por presentación |
+| 3 | Validación al exceder: bloquea "Guardar liberación" + mensaje |
+| 4 | Pendiente 0: muestra 0 y bloquea Guardar (aunque queden lotes sin liberar) |
+| 5 | Alcance: solo flujo usuario (Screen 12 → 13); backend intacto (se conserva RN-011) |
+
+**Regla**: `cantidad mostrada = cantidad pedida − Σ(papel + sobre)` de las liberaciones ya
+registradas del requerimiento (acumulado a nivel de requerimiento, no por lote; nunca negativo).
+Coherente con RF-165 (`papel + sobre = cantidad` al marcar ENTREGADO): al completar las
+liberaciones, `Σ cantidadLiberada = cantidad pedida`.
+
+### 71.1 Helpers — `mobile/src/utils/requerimientos.ts` (+86 líneas)
+
+| Helper | Regla |
+|---|---|
+| `totalLiberado(liberaciones)` | Σ(papel + sobre); `null` (data legacy pre-V21) aporta 0 |
+| `pendienteLiberacion(cantidad, liberaciones)` | `cantidad − totalLiberado`, mínimo 0 |
+| `restantePresentaciones(requerimiento, liberaciones)` | Restante por presentación, mínimo 0 |
+| `validarPresentacionesVsPendiente(papel, sobre, pendiente)` | `null` o mensaje de error |
+
+### 71.2 Screen 13 — `EditarRequerimientoScreen.tsx`
+
+- Carga `listarLiberaciones(id)` una sola vez (ENTREGADO/LIBERADO) y de ahí deriva el pendiente, el
+  restante por presentación y los lotes no liberados (se eliminó el try/catch anidado duplicado).
+- `Cantidad (millares)` (solo lectura) muestra el pendiente; `guardarLiberacion()` persiste
+  `cantidadLiberada = papelNum + sobreNum`.
+- Mensaje de validación bajo "Presentaciones entregadas" (`accessibilityRole="alert"`, estilo
+  `validacionError`) y botón "Guardar liberación" deshabilitado mientras la suma no sea válida.
+
+### 71.3 Ley 3 — versión y documentación
+
+| Artefacto | Valor |
+|---|---|
+| `mobile/package.json` | `version: 1.12.0` |
+| `mobile/android/app/build.gradle` | `versionName "1.12.0"` / `versionCode 16` |
+| `mobile/src/constants/appVersion.ts` | `APP_VERSION = '1.12.0'` (debe coincidir con los anteriores) |
+| `mobile/versionHistory.js` | entrada `1.12.0` (2026-09-14) con los cambios visibles al usuario |
+
+Se alineó también la aserción desactualizada de `PerfilScreen.test.tsx`
+(`'Versión 1.11.0'` → `'Versión 1.12.0'`), que estaba fijada a la versión anterior al bump de
+v1.11.1 (fallo pre-existente). PerfilScreen sigue con 1 fallo por otra causa (ver 71.6).
+
+### 71.4 Tests
+
+| Suite | Cobertura |
+|---|---|
+| `mobile/__tests__/requerimientosLiberacion.test.ts` (nuevo, 10 tests) | pendiente, restante por presentación, validación, data legacy `null` |
+| `mobile/__tests__/EditarRequerimientoScreen.test.tsx` (+5 tests) | pendiente 60 tras 140−80; defaults 40/20; payload `cantidadLiberada = 60`; bloqueo al exceder; pendiente 0 |
+
+### 71.5 Verificación (v1.12.0)
+
+| Comando | Resultado |
+|---|---|
+| `cd mobile && npx jest --runInBand EditarRequerimientoScreen requerimientosLiberacion` | 21 tests, 0 failures |
+| `cd mobile && npx tsc --noEmit` | TSC_OK (exit 0) |
+| `cd mobile && npx eslint .` | 0 errores (11 warnings pre-existentes en `src/utils/token.ts`) |
+| `cd mobile && npx jest --runInBand` | 144 tests: 132 passed / 12 failed (12 pre-existentes, ver abajo) |
+
+**Fallas pre-existentes (Ley 5 — verificado con `git stash` sobre HEAD `7b32fbb`)**: los mismos
+tests fallan sin este cambio (11): `HomeScreen` (3, `contarTexto('Bienvenido(a), Persona Test')` = 0),
+`PerfilScreen` (1, `contarTexto('DNI: 12345678')` = 0 — la aserción de versión ya se alineó),
+`CambiarPasswordScreen` (1) y `flows/requerimiento.e2e.test.tsx` (6: "carga fotos existentes del
+servidor" y "elimina foto del servidor al pulsar Quitar" — esperan un botón `Quitar foto del
+servidor` ya inexistente — más 4 del historial). El duodécimo fallo
+(`flows/ciclo-entrega.e2e.test.tsx` → "estado RECIBIDO muestra botón 'Ver liberaciones'") proviene
+del WIP **no commiteado** de V22 (`DetalleRequerimientoScreen.tsx`), ajeno a este cambio: en HEAD
+esa suite pasa.
+
+**Nota de estado en disco (Ley 2)**: este cambio se implementó **sobre WIP no commiteado** presente
+en el árbol (`V22__liberacion_plagas_fecha.sql`, backend de liberaciones, `ApiClient.ts`,
+`DetalleRequerimientoScreen.tsx`, `HistorialRequerimientoScreen.tsx` y parte de
+`EditarRequerimientoScreen.tsx` + su test). El commit de cierre debe incluir/describir ambos alcances.
+
+**Estado**: implementado y verificado (solo JS; APK pendiente de reconstruir si se requiere en
+dispositivo). Versión 1.12.0 / versionCode 16.
+
+---
+
+# 72. Alcance V22 incluido en el cierre (backend — WIP heredado)
+
+El commit de cierre incluye, además del alcance §71 (mobile v1.12.0), el **WIP backend pre-existente**
+que estaba sin commitear en el árbol (Ley 2 — documentado aquí como segundo alcance del release):
+
+## 72.1 Migración V22 — `liberacion_plagas` + `fechaLiberacion`
+
+| Elemento | Detalle |
+|---|---|
+| `V22__liberacion_plagas_fecha.sql` | Tabla pivote `liberacion_plagas` (`liberacion_id`, `plaga_id`, PK compuesta, FKs con `ON DELETE CASCADE` a `liberaciones`/`plagas`) + índice `idx_liberacion_plagas_plaga` |
+| `CrearLiberacionRequest` | Nuevo campo `plagas: List<Long>` (IDs de plagas objetivo de la liberación) |
+| `Liberacion` / `LiberacionService` | Persistencia de las plagas de la liberación en la pivote |
+| `fechaLiberacion` | El campo del requerimiento toma la **fecha de la liberación** registrada (ya no `now()`); `RecepcionService` ajustado |
+| `LiberacionDto` | Expone `plagas` en la respuesta |
+| `LiberacionResourceTest` | Ampliado con el caso multi-plaga |
+
+## 72.2 Mobile asociado (V22)
+
+- `ApiClient.ts`: envío de `plagas` en la creación de liberación.
+- `DetalleRequerimientoScreen.tsx` / `HistorialRequerimientoScreen.tsx`: muestra las plagas de cada
+  liberación (pestaña "Ver liberaciones").
+- `EditarRequerimientoScreen.tsx`: integración con el flujo de pendiente (§71).
+
+## 72.3 Verificación combinada (Ley 5)
+
+| Comando | Resultado |
+|---|---|
+| `cd mobile && npx jest --runInBand` | 144 tests: 132 passed / 12 failed (pre-existentes contra HEAD, ver §71.5; el fallo de `flows/ciclo-entrega.e2e` se resuelve con este alcance commiteado) |
+| `cd mobile && npx tsc --noEmit` | exit 0 |
+| `cd mobile && npx eslint .` | 0 errores |
+
+Backend V22: **verificado con `.\mvnw.cmd -o test` → 95 tests, 0 fallas** (LiberacionResourceTest
+ampliado a 10 casos con multi-plaga). **Nota**: el backend dockerizado corre Flyway V1-V21; al
+redesplegar se aplicará V22 automáticamente.

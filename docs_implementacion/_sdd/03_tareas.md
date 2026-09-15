@@ -140,7 +140,9 @@ cada tarea cierra con verificación (Ley 5) y, al fin del HITO, auditoría integ
 | MO-018 | Fixes offline/online post-HITO-013: API fallback en edición, chip PENDIENTE, cards bg, estado default | Alta | Completado (v1.6.2) |
 | MO-019 | Bump versión 1.6.2 / versionCode 9 + versionHistory | Alta | Completado (v1.6.2) |
 | MO-020 | Módulo Cumplimiento de Producción: botón lápiz/lupa en semana actual, modal registro/consulta | Alta | Completado (v1.7.0) |
+| MO-021 | Liberación parcial acumulada: `Cantidad (millares)` = pendiente (`cantidad − Σ(papel+sobre)`), defaults por restante de presentación, validación `papel+sobre ≤ pendiente`, helpers en `utils/requerimientos.ts` + 15 tests | Alta | Completado (v1.12.0 / HITO-017) |
 | BE-015 | Backend cumplimiento producción: V14, entity, repository, DTO, resource, upsert | Alta | Completado (v1.7.0) |
+| BE-016 | Liberación por lote (V21) + plagas por liberación y `fechaLiberacion` editable (V22 `liberacion_plagas`), `CrearLiberacionRequest.plagas`, `LiberacionDto.plagas` | Alta | Completado (v1.12.0 / HITO-017) |
 
 ---
 

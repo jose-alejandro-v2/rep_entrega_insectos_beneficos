@@ -127,7 +127,7 @@ export default function DetalleRequerimientoScreen() {
               accessibilityLabel="Ver recepciones"
             />
           )}
-          {req.estado === 'RECIBIDO' && (
+          {(req.estado === 'ENTREGADO' || req.estado === 'LIBERADO') && (
             <AppButton
               label="Liberaciones"
               icon="bug-outline"

@@ -6,6 +6,17 @@
 
 const versionHistory = [
   {
+    version: '1.12.0',
+    fecha: '2026-09-14',
+    cambios: [
+      'Liberación parcial acumulada: al liberar un lote, la cantidad mostrada es el pendiente por liberar (cantidad pedida menos la suma de papel + sobre de las liberaciones ya registradas), no el total pedido.',
+      'Ejemplo: requerimiento de 140 millares con 2 lotes; al liberar el primero con 60 papel + 20 sobre, la siguiente liberación muestra 60 millares.',
+      'Papel con postura y Sobre con cascarilla se pre-llenan con el restante por presentación (40 y 20 en el ejemplo).',
+      'No se permite guardar una liberación cuya suma de papel + sobre supere el pendiente: el botón "Guardar liberación" se bloquea con mensaje.',
+      'La cantidad liberada que se guarda en cada liberación es la suma de papel + sobre de esa liberación.',
+    ],
+  },
+  {
     version: '1.11.1',
     fecha: '2026-09-10',
     cambios: [

@@ -41,12 +41,12 @@ backend/      API Quarkus v2 — auth/usuarios bajo /api/v1, login 3 pasos, role
               (multi-select lotes/plagas con tablas pivote),
               fotos de requerimiento (bytes BYTEA en BD, V20), sync offline,
               cumplimiento de producción, despachos/recepciones/liberaciones
-              (migraciones V1-V21, Dockerfile multi-stage, TZ America/Lima)
+              (migraciones V1-V22, Dockerfile multi-stage, TZ America/Lima)
 mobile/       App React Native CLI 0.86 / React 19.2.3 — auth v2 (login 3 pasos, URL runtime,
               SecureStore/keychain), módulos Programación (Lunes/Jueves reales + Restante, pull-to-refresh,
               cumplimiento de producción), Requerimientos (multi-select lotes/plagas, evidencia de entrega
               en estado Aprobado), Catálogos, fotos de requerimiento
-               + hook usePhotoCapture — versión 1.11.1 (stock fix + Screen 13 campos habilitados)
+               + hook usePhotoCapture — versión 1.12.0 (liberación parcial acumulada + V22)
 web/          Frontend React + Vite (pendiente de scaffold)
 docs_implementacion/
 ├── _sdd/                      Especificación, plan, tareas e implementación
@@ -134,6 +134,18 @@ docs_implementacion/
   (migración V20, con fallback a disco para fotos legacy V11). **Liberación por lote** (V21):
   columna `liberado` en `requerimiento_lotes`, `papel_con_postura`/`sobre_con_cascarilla` por
   liberación, flujo multi-estado admin/user (Screen 7/8/12/13). Suite: **89 tests BE + 127 tests MO**.
+- **v1.12.0 (2026-09-14) = Liberación parcial acumulada + plagas por liberación (V22)**:
+  En el flujo usuario (Screen 12 → Screen 13), la **Cantidad (millares)** de "Liberar
+  Requerimiento" ya no muestra el total pedido sino el **pendiente**: `cantidad pedida −
+  Σ(papel + sobre)` de las liberaciones ya registradas. Ejemplo validado: requerimiento de 140
+  millares con 2 lotes; tras liberar 60 (papel) + 20 (sobre), al reingresar ("Por Liberar 1 de 2")
+  se muestra **60**. Papel/sobre se pre-llenan con el restante por presentación; se bloquea
+  "Guardar liberación" si la suma excede el pendiente; pendiente 0 bloquea Guardar. `cantidadLiberada`
+  persistida = `papel + sobre` de esa liberación (coherente con RF-165). Backend: migración
+  **V22** (`liberacion_plagas`, pivote N:N liberaciones↔plagas), `CrearLiberacionRequest` con
+  `plagas: List<Long>` y `fechaLiberacion` editable (el requerimiento toma la fecha de la
+  liberación, no `now()`), `LiberacionDto.plagas`, test `LiberacionResourceTest` ampliado.
+  Suite: 144 tests MO (132 pass / 12 fallas pre-existentes verificadas contra HEAD) · 95 tests BE (0 fallas).
 - **Pendientes**: SSL Pinning para producción (HTTPS en VPS), frontend web (React/Vite) y CI/CD
   (GitHub Actions). Ver [`docs_implementacion/_sdd/`](docs_implementacion/_sdd/).
 
@@ -143,12 +155,12 @@ Para desarrollo local se usa PostgreSQL 16 en Docker. Los **parámetros de conex
 [`docker-compose.yml`](docker-compose.yml) (raíz) y en
 [`backend/src/main/resources/application.properties`](backend/src/main/resources/application.properties).
 Son credenciales de **desarrollo** y no se exponen en este README por seguridad; conéctate a la BD que
-levantan esos archivos desde tu gestor (pgAdmin/DBeaver/DataGrip). Las migraciones Flyway `V1..V21`
+levantan esos archivos desde tu gestor (pgAdmin/DBeaver/DataGrip). Las migraciones Flyway `V1..V22`
 crean toda la estructura: `usuarios`, `roles`, `fundos`, `variedades`, `lotes`, `etapas_fenologicas`,
-`plagas`, `nematodos`, `patrones`, `programaciones`, `requerimientos` (+ pivotes `requerimiento_lotes`
-con `liberado` V21 y `requerimiento_plagas`), `fotos_requerimiento` (bytes BYTEA V20),
-`sync_log`, `cumplimiento_programacion`, `despachos`, `recepciones` y `liberaciones`
-(+ `papel_con_postura`/`sobre_con_cascarilla` V21).
+`plagas`, `nematodos`, `patrones`, `programaciones`, `requerimientos` (+ pivotes `requerimiento_lotes` con `liberado` V21 y `requerimiento_plagas`),
+`fotos_requerimiento` (bytes BYTEA V20), `sync_log`, `cumplimiento_programacion`, `despachos`,
+`recepciones` y `liberaciones` (+ `papel_con_postura`/`sobre_con_cascarilla` V21 y pivote
+`liberacion_plagas` V22).
 
 ## Verificación por capa
 

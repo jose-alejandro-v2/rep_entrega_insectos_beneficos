@@ -3,6 +3,8 @@ package pe.sistema.insectosbeneficos.liberaciones;
 import jakarta.enterprise.context.ApplicationScoped;
 import pe.sistema.insectosbeneficos.liberaciones.dto.LiberacionDto;
 
+import java.util.stream.Collectors;
+
 @ApplicationScoped
 public class LiberacionMapper {
 
@@ -22,6 +24,11 @@ public class LiberacionMapper {
         dto.setHoraLiberacion(l.getHoraLiberacion());
         dto.setCreadoPor(l.getCreadoPor());
         dto.setCreatedAt(l.getCreatedAt());
+        if (l.getPlagas() != null) {
+            dto.setPlagas(l.getPlagas().stream()
+                .map(p -> new LiberacionDto.PlagaDto(p.getId(), p.getNombre()))
+                .collect(Collectors.toList()));
+        }
         return dto;
     }
 }

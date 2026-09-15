@@ -292,3 +292,89 @@ export function requiereAlertaLiberacion(
 ): boolean {
   return r.estado === 'RECIBIDO' && horasDesdeCambioEstado(r, ahora) > 30;
 }
+/* ------------------------------------------------------------------ */
+/* Pendiente de liberación (Screen 13 — liberación parcial acumulada)  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Liberación mínima necesaria para calcular el pendiente de un requerimiento
+ * (estructuralmente compatible con `LiberacionDto` de ApiClient).
+ */
+export interface LiberacionPresentaciones {
+  papelConPostura: number | null;
+  sobreConCascarilla: number | null;
+}
+
+/** Σ(papel + sobre) de las liberaciones registradas (millares). */
+export function totalLiberado(liberaciones: LiberacionPresentaciones[]): number {
+  return liberaciones.reduce(
+    (acc, l) => acc + (l.papelConPostura ?? 0) + (l.sobreConCascarilla ?? 0),
+    0,
+  );
+}
+
+/**
+ * Pendiente por liberar de un requerimiento (millares): cantidad pedida −
+ * Σ(papel + sobre) de las liberaciones ya registradas. Nunca negativo
+ * (0 = no queda nada por liberar). Es el valor mostrado en "Cantidad
+ * (millares)" de Screen 13 (v1.12.0).
+ */
+export function pendienteLiberacion(
+  cantidad: number,
+  liberaciones: LiberacionPresentaciones[],
+): number {
+  const pendiente = cantidad - totalLiberado(liberaciones);
+  return pendiente > 0 ? pendiente : 0;
+}
+
+/** Restante por presentación (papel/sobre) tras las liberaciones. */
+export interface RestantePresentaciones {
+  papel: number;
+  sobre: number;
+}
+
+/**
+ * Restante por presentación: valor del requerimiento − Σ de lo ya liberado en
+ * esa presentación. Nunca negativo. Son los defaults de papel/sobre en
+ * Screen 13 al registrar una liberación parcial (v1.12.0).
+ */
+export function restantePresentaciones(
+  requerimiento: LiberacionPresentaciones,
+  liberaciones: LiberacionPresentaciones[],
+): RestantePresentaciones {
+  const restar = (
+    total: number | null,
+    seleccionar: (l: LiberacionPresentaciones) => number | null,
+  ): number => {
+    const restante =
+      (total ?? 0) -
+      liberaciones.reduce((acc, l) => acc + (seleccionar(l) ?? 0), 0);
+    return restante > 0 ? restante : 0;
+  };
+  return {
+    papel: restar(requerimiento.papelConPostura, l => l.papelConPostura),
+    sobre: restar(requerimiento.sobreConCascarilla, l => l.sobreConCascarilla),
+  };
+}
+
+/**
+ * Validación de las presentaciones de una liberación (Screen 13, v1.12.0):
+ *  - papel + sobre <= 0         → 'Ingresa papel con postura o sobre con cascarilla de arroz'
+ *  - papel + sobre > pendiente  → 'La suma de papel + sobre supera la cantidad por liberar'
+ *  - ok                         → `null`
+ * La `cantidadLiberada` que se persiste es papel + sobre (opción A).
+ */
+export function validarPresentacionesVsPendiente(
+  papel: number,
+  sobre: number,
+  pendiente: number,
+): string | null {
+  const liberado = papel + sobre;
+  if (liberado <= 0) {
+    return 'Ingresa papel con postura o sobre con cascarilla de arroz';
+  }
+  if (liberado > pendiente) {
+    return 'La suma de papel + sobre supera la cantidad por liberar';
+  }
+  return null;
+}

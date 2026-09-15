@@ -68,8 +68,8 @@ AGENTS.md
 README.md
 docker-compose.yml              (proyecto `repo_registro_insectos_beneficos`: postgres:16 + backend + nginx)
 nginx/nginx.conf                (proxy 8080 → backend:6101)
-backend/                     (API Quarkus v2 — auth/usuarios bajo /api/v1, Flyway V1-V21, Dockerfile multi-stage,
-                              89 tests; imagen `repo_registro_insectos_beneficos-backend`, TZ America/Lima)
+backend/                     (API Quarkus v2 — auth/usuarios bajo /api/v1, Flyway V1-V22, Dockerfile multi-stage,
+                              95 tests; imagen `repo_registro_insectos_beneficos-backend`, TZ America/Lima)
 mobile/                      (React Native CLI 0.86 / React 19.2.3 — auth v2: login 3 pasos,
                               ApiClient.ts + keychain, ServerCheck/Settings, 127 tests)
 web/                         (React + Vite — pendiente de scaffold)
@@ -95,7 +95,7 @@ docs_implementacion/
 
 `backend/` es la API Quarkus v2 (auth/usuarios bajo `/api/v1`, login 3 pasos rol→usuario→DNI,
 tabla `roles` + `usuarios.rol_id` V3, Super Admin id=1 inmune, 32 tests con Testcontainers,
-multi-select lotes/plagas V19 + fotos BYTEA en BD V20, 89 tests con Testcontainers);
+multi-select lotes/plagas V19 + fotos BYTEA en BD V20, 95 tests con Testcontainers);
 `mobile/` es la app RN CLI v2 (`src/services/ApiClient.ts` → `/api/v1`, token y URL en SecureStore
 vía keychain, ServerCheck/Settings de URL runtime, login 3 pasos, 127 tests).
 **HITO-001 = Infraestructura base** (cerrado) y **HITO-002 = Auth v2** (ver §7).
@@ -236,6 +236,14 @@ y reportar al Orchestrator; no "arreglarlo" en silencio.
 - **Endpoint backend para servir fotos** ya está cubierto por el flujo BYTEA
   (`/api/v1/requerimientos/{id}/fotos/contenido`, Ordenable en Response). La validación
   end-to-end desde mobile contra el backend real y actas PDF siguen pendientes (próxima fase).
+- **v1.12.0 (2026-09-14) = Liberación parcial acumulada (mobile) + Plagas por liberación + fechaLiberacion (backend V22)**:
+  Flujo usuario Screen 12 → Screen 13: `Cantidad (millares)` muestra el **pendiente** =
+  `cantidad pedida − Σ(papel+sobre)` de liberaciones registradas (ej. 140 → tras liberar 60+20 → 60).
+  Defaults papel/sobre = restante por presentación; validación `papel+sobre ≤ pendiente` (y > 0);
+  pendiente 0 bloquea Guardar. Backend: migración **V22** `liberacion_plagas` (pivote N:N),
+  `CrearLiberacionRequest.plagas`, `fechaLiberacion` editable (requerimiento toma la fecha de la
+  liberación). Versión **1.12.0** / versionCode 16. Mobile: 144 tests (132 pass / 12 pre-existentes
+  verificados contra HEAD) · Backend: 95 tests (0 fallas).
 - Los hitos se cierran con **auditoría integral PASS + verificación + `05_hito_NNN.md` + commit** coherente.
 - `versionHistory.js` es la fuente del historial visible al usuario (mobile existente); web la adoptará.
 

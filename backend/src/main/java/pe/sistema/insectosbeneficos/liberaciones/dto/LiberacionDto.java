@@ -2,6 +2,7 @@ package pe.sistema.insectosbeneficos.liberaciones.dto;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 
 /**
  * DTO de respuesta para liberaciones (HITO-015).
@@ -23,6 +24,8 @@ public class LiberacionDto {
     private Long creadoPor;
     private String creadoPorNombre;
     private Instant createdAt;
+
+    private List<PlagaDto> plagas;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -68,4 +71,18 @@ public class LiberacionDto {
 
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
+
+    public List<PlagaDto> getPlagas() { return plagas; }
+    public void setPlagas(List<PlagaDto> plagas) { this.plagas = plagas; }
+
+    public static class PlagaDto {
+        private Long id;
+        private String nombre;
+        public PlagaDto() {}
+        public PlagaDto(Long id, String nombre) { this.id = id; this.nombre = nombre; }
+        public Long getId() { return id; }
+        public void setId(Long id) { this.id = id; }
+        public String getNombre() { return nombre; }
+        public void setNombre(String nombre) { this.nombre = nombre; }
+    }
 }

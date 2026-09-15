@@ -5,10 +5,13 @@ import org.hibernate.annotations.Fetch;
 import org.hibernate.annotations.FetchMode;
 import pe.sistema.insectosbeneficos.catalogos.Fundo;
 import pe.sistema.insectosbeneficos.catalogos.Lote;
+import pe.sistema.insectosbeneficos.catalogos.Plaga;
 import pe.sistema.insectosbeneficos.requerimientos.Requerimiento;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Liberación en campo de insectos benéficos (HITO-015 / MOD-08).
@@ -63,6 +66,14 @@ public class Liberacion {
     @Column(name = "created_at", updatable = false)
     private Instant createdAt = Instant.now();
 
+    @ManyToMany(fetch = FetchType.EAGER)
+    @JoinTable(
+        name = "liberacion_plagas",
+        joinColumns = @JoinColumn(name = "liberacion_id"),
+        inverseJoinColumns = @JoinColumn(name = "plaga_id")
+    )
+    private List<Plaga> plagas = new ArrayList<>();
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -98,4 +109,7 @@ public class Liberacion {
 
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
+
+    public List<Plaga> getPlagas() { return plagas; }
+    public void setPlagas(List<Plaga> plagas) { this.plagas = plagas; }
 }

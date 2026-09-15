@@ -302,8 +302,10 @@ export default function HistorialRequerimientoScreen() {
         {reqs.map(r => {
           const lotesPendientes = (r.lotes?.length ?? 0) - (r.lotesLiberados ?? 0);
           const botonLabel =
-            r.estado === 'ENTREGADO'
-              ? `Por Liberar ${lotesPendientes} de ${r.lotes?.length ?? 0}`
+            r.estado === 'ENTREGADO' || r.estado === 'LIBERADO'
+              ? lotesPendientes > 0
+                ? `Por Liberar ${lotesPendientes} de ${r.lotes?.length ?? 0}`
+                : 'Ver'
               : 'Editar';
           return (
           <AppCard key={r.id} style={styles.card}>

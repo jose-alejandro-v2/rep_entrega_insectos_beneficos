@@ -9,14 +9,22 @@
  * Cubre RN-035: la alerta permanente de 30 h se muestra cuando el estado es
  * RECIBIDO y transcurrieron más de 30 h desde el último cambio de estado.
  * Cubre HITO-011: carga de fotos existentes del servidor.
+ * V22: campos habilitados, botones cámara/galería, guard ≥1 foto.
  */
 
 import React from 'react';
 import ReactTestRenderer, {act} from 'react-test-renderer';
 import * as Keychain from 'react-native-keychain';
+import {launchImageLibrary} from 'react-native-image-picker';
 import EditarRequerimientoScreen from '../src/screens/EditarRequerimientoScreen';
 import {clearToken, type EstadoRequerimiento} from '../src/services/ApiClient';
-import {flushPromises, getMockApi, makeToken} from '../test-utils/helpers';
+import {
+  contarTexto,
+  findByLabel,
+  flushPromises,
+  getMockApi,
+  makeToken,
+} from '../test-utils/helpers';
 
 const mockGoBack = jest.fn();
 
@@ -77,8 +85,8 @@ function requerimientoBase({updatedAt, estado = 'ENTREGADO'}: {updatedAt: string
     estado,
     stockDisponible: 30,
     observaciones: null,
-    papelConPostura: null,
-    sobreConCascarilla: null,
+    papelConPostura: null as number | null,
+    sobreConCascarilla: null as number | null,
     fechaLiberacion: '2026-08-10T10:00:00Z',
     horaLiberacion: '10:00',
     creadoPor: 5,
@@ -92,7 +100,19 @@ let requerimientoActual = requerimientoBase({
   updatedAt: new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString(),
 });
 
+/** Liberaciones devueltas por API (mutable por test — v1.12.0). */
+let liberacionesActuales: Array<{
+  id: number;
+  loteId: number;
+  papelConPostura: number | null;
+  sobreConCascarilla: number | null;
+  cantidadLiberada: number;
+}> = [];
+
 const api = getMockApi();
+
+/** Mock ArrayBuffer for fetchFotoBinaria */
+const MOCK_ARRAYBUFFER = new Uint8Array([0xFF, 0xD8, 0xFF, 0xE0]).buffer;
 
 async function renderEdicion() {
   (Keychain.getGenericPassword as jest.Mock).mockImplementation(
@@ -108,8 +128,11 @@ async function renderEdicion() {
     if (url.match(/\/requerimientos\/\d+\/fotos$/)) {
       return Promise.resolve({data: FOTOS_DTO});
     }
+    if (url.match(/\/requerimientos\/\d+\/fotos\/\d+\/imagen$/)) {
+      return Promise.resolve({data: MOCK_ARRAYBUFFER, headers: {'content-type': 'image/jpeg'}});
+    }
     if (url.match(/\/requerimientos\/\d+\/liberaciones$/)) {
-      return Promise.resolve({data: []});
+      return Promise.resolve({data: liberacionesActuales});
     }
     const stockMatch = url.match(/^\/programaciones\/(\d+)\/stock$/);
     if (stockMatch) {
@@ -124,6 +147,7 @@ async function renderEdicion() {
   });
 
   api.delete.mockResolvedValue({data: {}});
+  api.post.mockResolvedValue({data: {}});
 
   let tree!: ReactTestRenderer.ReactTestRenderer;
   await act(async () => {
@@ -139,6 +163,13 @@ async function renderEdicion() {
 
 function contarAlertas(tree: ReactTestRenderer.ReactTestRenderer): number {
   return tree.root.findAll(node => node.props.accessibilityRole === 'alert').length;
+}
+
+function findTexts(tree: ReactTestRenderer.ReactTestRenderer, text: string) {
+  return tree.root.findAll(
+    (node: any) =>
+      typeof node.props.children === 'string' && node.props.children === text,
+  );
 }
 
 describe('EditarRequerimientoScreen — alerta de 30 h (RN-035)', () => {
@@ -174,13 +205,13 @@ describe('EditarRequerimientoScreen — alerta de 30 h (RN-035)', () => {
   });
 });
 
-describe('EditarRequerimientoScreen — fotos del servidor (HITO-011)', () => {
+describe('EditarRequerimientoScreen — fotos del servidor (HITO-011/V22)', () => {
   beforeEach(async () => {
     await clearToken();
     mockGoBack.mockClear();
   });
 
-  test('carga y muestra fotos existentes del servidor bajo Foto de Entrega', async () => {
+  test('carga y muestra fotos existentes del servidor bajo Foto de Entrega (data URI)', async () => {
     requerimientoActual = requerimientoBase({
       updatedAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
     });
@@ -190,17 +221,272 @@ describe('EditarRequerimientoScreen — fotos del servidor (HITO-011)', () => {
     });
 
     // Verificar que la etiqueta "Foto de Entrega" está presente
-    const entregaLabels = tree.root.findAll(
-      (node: any) =>
-        typeof node.props.children === 'string' && node.props.children === 'Foto de Entrega',
-    );
+    const entregaLabels = findTexts(tree, 'Foto de Entrega');
     expect(entregaLabels.length).toBeGreaterThanOrEqual(1);
 
-    // Verificar que la foto se muestra
+    // Verificar que la foto se muestra (data URI, no URL externa)
     const fotoImages = tree.root.findAll(
       (node: any) =>
-        node.props.source && typeof node.props.source.uri === 'string' && node.props.source.uri.includes('/fotos/'),
+        node.props.source && typeof node.props.source.uri === 'string' && node.props.source.uri.startsWith('data:'),
     );
     expect(fotoImages.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('EditarRequerimientoScreen — modo liberación ENTREGADO (V22)', () => {
+  beforeEach(async () => {
+    await clearToken();
+    mockGoBack.mockClear();
+  });
+
+  test('muestra campos habilitados y botones cámara/galería en modo ENTREGADO', async () => {
+    requerimientoActual = requerimientoBase({
+      updatedAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+      estado: 'ENTREGADO',
+    });
+    const tree = await renderEdicion();
+    await act(async () => {
+      await flushPromises();
+    });
+
+    // Título = "Liberar Requerimiento"
+    const headerTitles = findTexts(tree, 'Liberar Requerimiento');
+    expect(headerTitles.length).toBeGreaterThanOrEqual(1);
+
+    // Subtítulos de sección presentes
+    expect(findTexts(tree, 'Liberar lote').length).toBeGreaterThanOrEqual(1);
+    expect(findTexts(tree, 'Presentaciones entregadas').length).toBeGreaterThanOrEqual(1);
+    expect(findTexts(tree, 'Plaga objetivo').length).toBeGreaterThanOrEqual(1);
+
+    // Botones cámara y galería presentes
+    const camaraBtn = tree.root.findAll(
+      (node: any) => node.props.accessibilityLabel === 'Tomar foto de liberación',
+    );
+    expect(camaraBtn.length).toBeGreaterThanOrEqual(1);
+
+    const galeriaBtn = tree.root.findAll(
+      (node: any) => node.props.accessibilityLabel === 'Seleccionar foto de liberación',
+    );
+    expect(galeriaBtn.length).toBeGreaterThanOrEqual(1);
+
+    // Botón Guardar deshabilitado (no hay fotos)
+    const guardarBtn = tree.root.findAll(
+      (node: any) =>
+        node.props.accessibilityLabel === 'Guardar liberación' && node.props.disabled === true,
+    );
+    expect(guardarBtn.length).toBeGreaterThanOrEqual(1);
+  });
+
+  test('muestra sección Foto de Liberación con placeholder', async () => {
+    requerimientoActual = requerimientoBase({
+      updatedAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+      estado: 'ENTREGADO',
+    });
+    const tree = await renderEdicion();
+    await act(async () => {
+      await flushPromises();
+    });
+
+    // Título "Foto de Liberación"
+    expect(findTexts(tree, 'Foto de Liberación').length).toBeGreaterThanOrEqual(1);
+
+    // Placeholder "Sin foto de liberación" (sin fotos capturadas)
+    expect(findTexts(tree, 'Sin foto de liberación').length).toBeGreaterThanOrEqual(1);
+  });
+
+  test('muestra formulario de liberación cuando estado es LIBERADO (sin candado)', async () => {
+    requerimientoActual = requerimientoBase({
+      updatedAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+      estado: 'LIBERADO',
+    });
+    const tree = await renderEdicion();
+    await act(async () => {
+      await flushPromises();
+    });
+
+    // Título = "Liberar Requerimiento" (no "Detalle Requerimiento")
+    const headerTitles = findTexts(tree, 'Liberar Requerimiento');
+    expect(headerTitles.length).toBeGreaterThanOrEqual(1);
+
+    // Subtítulos de sección presentes (formulario visible, no oculto)
+    expect(findTexts(tree, 'Liberar lote').length).toBeGreaterThanOrEqual(1);
+    expect(findTexts(tree, 'Plaga objetivo').length).toBeGreaterThanOrEqual(1);
+
+    // Plagas del requerimiento aparecen seleccionadas (chips del multi-select)
+    const plagaChips = tree.root.findAll(
+      (node: any) =>
+        typeof node.props.children === 'string' && node.props.children === 'Pulga',
+    );
+    expect(plagaChips.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* v1.12.0 — pendiente por liberar (liberación parcial acumulada)      */
+/* ------------------------------------------------------------------ */
+
+/** Liberación del lote A: 60 papel + 20 sobre (cantidadLiberada = 80). */
+const LIBERACION_LOTE_A = {
+  id: 1,
+  loteId: 10,
+  papelConPostura: 60,
+  sobreConCascarilla: 20,
+  cantidadLiberada: 80,
+};
+
+/** Requerimiento de 140 millares con 2 lotes (papel 100 + sobre 40). */
+function requerimientoDosLotes() {
+  return {
+    ...requerimientoBase({
+      updatedAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+    }),
+    cantidad: 140,
+    lotes: [
+      {id: 10, nombre: 'Lote A'},
+      {id: 11, nombre: 'Lote B'},
+    ],
+    papelConPostura: 100 as number | null,
+    sobreConCascarilla: 40 as number | null,
+  };
+}
+
+/** Deja disponible la galería para agregar una foto de liberación. */
+async function agregarFotoLiberacion(tree: ReactTestRenderer.ReactTestRenderer) {
+  (launchImageLibrary as jest.Mock).mockResolvedValue({
+    didCancel: false,
+    assets: [
+      {
+        uri: 'file:///liberacion.jpg',
+        type: 'image/jpeg',
+        fileName: 'liberacion.jpg',
+        fileSize: 1024,
+      },
+    ],
+  });
+  await act(async () => {
+    findByLabel(tree, 'Seleccionar foto de liberación').props.onPress();
+  });
+  await act(async () => {
+    await flushPromises();
+  });
+}
+
+describe('EditarRequerimientoScreen — pendiente por liberar (v1.12.0)', () => {
+  beforeEach(async () => {
+    await clearToken();
+    mockGoBack.mockClear();
+    liberacionesActuales = [];
+    (launchImageLibrary as jest.Mock).mockReset();
+    (launchImageLibrary as jest.Mock).mockResolvedValue({didCancel: true});
+  });
+
+  test('muestra el pendiente (140 − 80 = 60) y el restante por presentación', async () => {
+    requerimientoActual = requerimientoDosLotes();
+    liberacionesActuales = [LIBERACION_LOTE_A];
+
+    const tree = await renderEdicion();
+    await act(async () => {
+      await flushPromises();
+    });
+
+    // Cantidad = pendiente (no el total pedido de 140).
+    expect(findByLabel(tree, 'Cantidad').props.value).toBe('60');
+    // Defaults = restante por presentación (papel 100−60, sobre 40−20).
+    expect(findByLabel(tree, 'Papel con postura').props.value).toBe('40');
+    expect(findByLabel(tree, 'Sobre con cascarilla').props.value).toBe('20');
+    // El lote ya liberado no vuelve a ofrecerse ("Por Liberar 1 de 2").
+    expect(contarTexto(tree, 'Lote B')).toBeGreaterThanOrEqual(1);
+  });
+
+  test('sin liberaciones: cantidad = total pedido y defaults del requerimiento', async () => {
+    requerimientoActual = requerimientoDosLotes();
+    liberacionesActuales = [];
+
+    const tree = await renderEdicion();
+    await act(async () => {
+      await flushPromises();
+    });
+
+    expect(findByLabel(tree, 'Cantidad').props.value).toBe('140');
+    expect(findByLabel(tree, 'Papel con postura').props.value).toBe('100');
+    expect(findByLabel(tree, 'Sobre con cascarilla').props.value).toBe('40');
+  });
+
+  test('guarda cantidadLiberada = papel + sobre de esa liberación (40 + 20 = 60)', async () => {
+    requerimientoActual = requerimientoDosLotes();
+    liberacionesActuales = [LIBERACION_LOTE_A];
+
+    const tree = await renderEdicion();
+    await act(async () => {
+      await flushPromises();
+    });
+    await agregarFotoLiberacion(tree);
+
+    // Los defaults (40/20 = 60) caben en el pendiente 60 → habilitado.
+    expect(findByLabel(tree, 'Guardar liberación').props.disabled).toBe(false);
+
+    await act(async () => {
+      findByLabel(tree, 'Guardar liberación').props.onPress();
+    });
+    await act(async () => {
+      await flushPromises();
+    });
+
+    expect(api.post).toHaveBeenCalledWith(
+      '/requerimientos/4/liberaciones',
+      expect.objectContaining({
+        loteId: 11,
+        cantidadLiberada: 60,
+        papelConPostura: 40,
+        sobreConCascarilla: 20,
+      }),
+    );
+  });
+
+  test('bloquea Guardar y avisa cuando papel + sobre supera el pendiente', async () => {
+    requerimientoActual = requerimientoDosLotes();
+    liberacionesActuales = [LIBERACION_LOTE_A];
+
+    const tree = await renderEdicion();
+    await act(async () => {
+      await flushPromises();
+    });
+    await agregarFotoLiberacion(tree);
+
+    // 100 + 20 = 120 > 60 (pendiente) → bloqueado con mensaje.
+    await act(async () => {
+      findByLabel(tree, 'Papel con postura').props.onChangeText('100');
+    });
+
+    expect(findByLabel(tree, 'Guardar liberación').props.disabled).toBe(true);
+    expect(
+      contarTexto(tree, 'La suma de papel + sobre supera la cantidad por liberar'),
+    ).toBeGreaterThanOrEqual(1);
+  });
+
+  test('pendiente 0: sin cantidad por liberar y Guardar bloqueado', async () => {
+    requerimientoActual = requerimientoDosLotes();
+    liberacionesActuales = [
+      LIBERACION_LOTE_A,
+      {
+        id: 2,
+        loteId: 11,
+        papelConPostura: 40,
+        sobreConCascarilla: 20,
+        cantidadLiberada: 60,
+      },
+    ];
+
+    const tree = await renderEdicion();
+    await act(async () => {
+      await flushPromises();
+    });
+
+    expect(findByLabel(tree, 'Cantidad').props.value).toBe('0');
+    expect(findByLabel(tree, 'Papel con postura').props.value).toBe('');
+    expect(findByLabel(tree, 'Guardar liberación').props.disabled).toBe(true);
+    expect(
+      contarTexto(tree, 'Ingresa papel con postura o sobre con cascarilla de arroz'),
+    ).toBeGreaterThanOrEqual(1);
   });
 });
