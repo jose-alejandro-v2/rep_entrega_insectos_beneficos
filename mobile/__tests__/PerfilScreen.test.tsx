@@ -88,7 +88,7 @@ describe('PerfilScreen (estructura UX Apilamiento → Vanguard)', () => {
     expect(contarTexto(tree, 'Aplicación')).toBe(1);
     // v1.12.0: la aserción estaba fijada a 1.11.0 (fallo pre-existente desde
     // el bump a 1.11.1); se alinea con APP_VERSION.
-    expect(contarTexto(tree, 'Versión 1.12.0')).toBe(1);
+    expect(contarTexto(tree, 'Versión 1.14.0')).toBe(1);
     expect(findByLabel(tree, 'Abrir historial de versiones')).toBeTruthy();
   });
 

@@ -11,14 +11,14 @@ evidencias fotográficas y acta PDF.
 | Capa | Tecnología |
 |---|---|
 | Autenticación | JWT local (tabla `usuarios` + super admin) |
-| Backend | Quarkus (Java), PostgreSQL + Flyway, iText PDF, SMTP |
+| Backend | Quarkus (Java), PostgreSQL + Flyway, iText PDF, SMTP (notificaciones, relay interno `10.13.10.10:25`), Firebase FCM (push) |
 | Mobile | React Native CLI (React Navigation, react-native-paper MD3, React Hook Form + Zod) |
 | Web | React 18 + Vite + MUI |
 | Infra | Docker / Docker Compose, Nginx, GitHub Actions, VPS Linux |
 
 Decisiones de arquitectura vigentes y decisiones descartadas: ver
 [`docs_implementacion/_auditoria/ADRs_AUDITORIA/`](docs_implementacion/_auditoria/ADRs_AUDITORIA/)
-(`ADR-A001.md`, `ADR-A002.md`, `ADR-A003.md`).
+(`ADR-A001.md`, `ADR-A002.md`, `ADR-A003.md`, `ADR-A004.md`).
 
 ## Herramientas de documentación
 
@@ -40,13 +40,15 @@ backend/      API Quarkus v2 — auth/usuarios bajo /api/v1, login 3 pasos, role
               (fundos/variedades/lotes/etapas/plagas/nematodos/patrones), requerimientos
               (multi-select lotes/plagas con tablas pivote),
               fotos de requerimiento (bytes BYTEA en BD, V20), sync offline,
-              cumplimiento de producción, despachos/recepciones/liberaciones
-              (migraciones V1-V22, Dockerfile multi-stage, TZ America/Lima)
+              cumplimiento de producción, despachos/recepciones/liberaciones,
+              notificaciones multi-canal (SMTP relay interno + Firebase FCM + in-app V25),
+              dispositivos FCM (V24)
+              (migraciones V1-V25, Dockerfile multi-stage, TZ America/Lima)
 mobile/       App React Native CLI 0.86 / React 19.2.3 — auth v2 (login 3 pasos, URL runtime,
               SecureStore/keychain), módulos Programación (Lunes/Jueves reales + Restante, pull-to-refresh,
               cumplimiento de producción), Requerimientos (multi-select lotes/plagas, evidencia de entrega
-              en estado Aprobado), Catálogos, fotos de requerimiento
-               + hook usePhotoCapture — versión 1.12.0 (liberación parcial acumulada + V22)
+              en estado Aprobado), Catálogos (Usuarios con correo electrónico), fotos de requerimiento
+               + hook usePhotoCapture, notificaciones in-app + FCM — versión 1.14.0
 web/          Frontend React + Vite (pendiente de scaffold)
 docs_implementacion/
 ├── _sdd/                      Especificación, plan, tareas e implementación
@@ -146,8 +148,25 @@ docs_implementacion/
   `plagas: List<Long>` y `fechaLiberacion` editable (el requerimiento toma la fecha de la
   liberación, no `now()`), `LiberacionDto.plagas`, test `LiberacionResourceTest` ampliado.
   Suite: 144 tests MO (132 pass / 12 fallas pre-existentes verificadas contra HEAD) · 95 tests BE (0 fallas).
-- **Pendientes**: SSL Pinning para producción (HTTPS en VPS), frontend web (React/Vite) y CI/CD
-  (GitHub Actions). Ver [`docs_implementacion/_sdd/`](docs_implementacion/_sdd/).
+- **v1.13.0 (2026-09-14) = Notificaciones por correo SMTP + email en usuarios**:
+  Se conectan los correos que la spec exige (RF-137/146/166, RN-018/027/039) sobre
+  `usuarios.email` (migración **V23**). Evento 1: al **publicar** una programación se notifica
+  a TODOS los usuarios rol **Usuario** (Sanidad) activos con correo cargado. Evento 2: al marcar un
+  requerimiento como **ENTREGADO**, se notifica al **solicitante**. Backend: `quarkus-mailer`,
+  `NotificacionService` best-effort. Mobile: campo **Correo electrónico** en Catálogos > Usuarios.
+  Suite: **102 tests BE (0 fallas) · 145 tests MO**.
+- **v1.14.0 (2026-09-16) = Notificaciones multi-canal + Firebase FCM + Notificaciones in-app**:
+  Ampliación del HITO-018 con tres componentes: (1) **SMTP relay interno** — Exchange interno
+  `10.13.10.10:25` (sin TLS, sin AUTH, relay abierto). Verificado con curl desde contenedor
+  (`250 2.6.0 Queued mail for delivery`). (2) **Firebase Cloud Messaging** — autorizado por
+  ADR-A004. Backend: `FirebasePushService` + `DispositivoToken` (V24). Mobile: `@react-native-firebase/messaging`
+  v26 (modular API), `NotificationService.ts`, `NotificacionesScreen.tsx`. (3) **Notificaciones
+  in-app** — tabla `notificaciones` (V25), entity, repository, resource, DTO. 4 eventos:
+  programación publicada, requerimiento creado, cambio de estado, requerimiento entregado.
+  Suite: **102 tests BE (0 fallas) · 145 tests MO**.
+- **Pendientes**: Firebase Console (crear proyecto, descargar `google-services.json` +
+  `firebase-service-account.json`), frontend web (React/Vite) y CI/CD (GitHub Actions).
+  Ver [`docs_implementacion/_sdd/`](docs_implementacion/_sdd/).
 
 ## Base de datos local (desarrollo)
 
@@ -155,12 +174,12 @@ Para desarrollo local se usa PostgreSQL 16 en Docker. Los **parámetros de conex
 [`docker-compose.yml`](docker-compose.yml) (raíz) y en
 [`backend/src/main/resources/application.properties`](backend/src/main/resources/application.properties).
 Son credenciales de **desarrollo** y no se exponen en este README por seguridad; conéctate a la BD que
-levantan esos archivos desde tu gestor (pgAdmin/DBeaver/DataGrip). Las migraciones Flyway `V1..V22`
-crean toda la estructura: `usuarios`, `roles`, `fundos`, `variedades`, `lotes`, `etapas_fenologicas`,
+levantan esos archivos desde tu gestor (pgAdmin/DBeaver/DataGrip). Las migraciones Flyway `V1..V25`
+crean toda la estructura: `usuarios` (con `email` V23), `roles`, `fundos`, `variedades`, `lotes`, `etapas_fenologicas`,
 `plagas`, `nematodos`, `patrones`, `programaciones`, `requerimientos` (+ pivotes `requerimiento_lotes` con `liberado` V21 y `requerimiento_plagas`),
 `fotos_requerimiento` (bytes BYTEA V20), `sync_log`, `cumplimiento_programacion`, `despachos`,
-`recepciones` y `liberaciones` (+ `papel_con_postura`/`sobre_con_cascarilla` V21 y pivote
-`liberacion_plagas` V22).
+`recepciones`, `liberaciones` (+ `papel_con_postura`/`sobre_con_cascarilla` V21 y pivote
+`liberacion_plagas` V22), `dispositivos_tokens` (V24, FCM tokens) y `notificaciones` (V25, in-app center).
 
 ## Verificación por capa
 

@@ -141,6 +141,37 @@ public class UsuarioService {
     }
 
     // ------------------------------------------------------------------
+    // Correo de notificaciones (HITO-018)
+    // ------------------------------------------------------------------
+
+    /** Normaliza el correo: trim + lowercase; vacio/null -> null (sin correo). */
+    private String normalizarEmail(String email) {
+        if (email == null || email.isBlank()) {
+            return null;
+        }
+        String limpio = email.trim().toLowerCase();
+        if (!limpio.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
+            throw new ApiException(Response.Status.BAD_REQUEST, "CORREO_INVALIDO",
+                    "El correo electrónico no tiene un formato válido");
+        }
+        return limpio;
+    }
+
+    /** Verifica unicidad del correo (409 si otro usuario lo usa). */
+    private void verificarEmailUnico(String email, Long exceptoId) {
+        if (email == null) {
+            return;
+        }
+        Usuario duplicado = exceptoId == null
+                ? Usuario.find("email", email).firstResult()
+                : Usuario.find("email = ?1 and id <> ?2", email, exceptoId).firstResult();
+        if (duplicado != null) {
+            throw new ApiException(Response.Status.CONFLICT, "CORREO_YA_EXISTE",
+                    "El correo '" + email + "' ya está asignado a otro usuario");
+        }
+    }
+
+    // ------------------------------------------------------------------
     // Listado / detalle
     // ------------------------------------------------------------------
 
@@ -207,6 +238,12 @@ public class UsuarioService {
                     "El usuario '" + req.usuario.trim() + "' ya existe");
         }
 
+        // Email de notificaciones (HITO-018): opcional, se normaliza y valida.
+        String email = normalizarEmail(req.email);
+        if (email != null) {
+            verificarEmailUnico(email, null);
+        }
+
         Usuario u = new Usuario();
         u.usuario = req.usuario.trim();
         u.nombre = req.nombre.trim();
@@ -216,6 +253,7 @@ public class UsuarioService {
         u.debeCambiarPassword = true;
         u.estado = EstadoUsuario.ACTIVO;
         u.dni = (req.dni == null || req.dni.isBlank()) ? null : req.dni;
+        u.email = email;
         u.creadoPor = actual.getId();
         u.persist();
         return mapper.toDto(u);
@@ -254,6 +292,13 @@ public class UsuarioService {
         u.nombre = req.nombre.trim();
         u.rol = nuevoRol;
         u.estado = req.estado;
+        // Email (HITO-018): si el campo viene null se PRESERVA el actual; si viene
+        // como string (incl. vacio) se normaliza/valida y se aplica (vacio limpia).
+        if (req.email != null) {
+            String email = normalizarEmail(req.email);
+            verificarEmailUnico(email, id);
+            u.email = email;
+        }
         u.updatedAt = java.time.Instant.now();
         u.persist();
         return mapper.toDto(u);

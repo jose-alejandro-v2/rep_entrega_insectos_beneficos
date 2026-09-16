@@ -86,6 +86,9 @@ public class RequerimientoService {
     @Inject
     ActualUsuario actualUsuario;
 
+    @Inject
+    pe.sistema.insectosbeneficos.notificaciones.NotificacionService notificacionService;
+
     // ------------------------------------------------------------------
     // Lectura
     // ------------------------------------------------------------------
@@ -246,6 +249,7 @@ public class RequerimientoService {
         }
 
         validarTransicion(r.getEstado(), req.getEstado());
+        String estadoAnterior = r.getEstado();
 
         // Aplica campos básicos
         r.setFecha(req.getFecha());
@@ -282,6 +286,12 @@ public class RequerimientoService {
         eliminarPlagasPivote(r);
         if (!plagaIds.isEmpty()) {
             persistirPlagasPivote(r, plagaIds);
+        }
+
+        // HITO-018: correo al solicitante cuando el requerimiento pasa a ENTREGADO
+        // (RF-166/RN-027). Best-effort (NotificacionService nunca lanza).
+        if ("ENTREGADO".equals(req.getEstado()) && !"ENTREGADO".equals(estadoAnterior)) {
+            notificacionService.notificarRequerimientoEntregado(r);
         }
 
         return mapper.toDto(r);

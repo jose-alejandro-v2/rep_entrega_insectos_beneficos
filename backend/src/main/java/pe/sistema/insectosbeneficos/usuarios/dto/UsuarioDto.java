@@ -20,6 +20,8 @@ public class UsuarioDto {
     public EstadoUsuario estado;
     public boolean debeCambiarPassword;
     public String dni;
+    /** Correo para notificaciones (HITO-018); null si no cargado. */
+    public String email;
     public Long creadoPor;
     public Instant createdAt;
     public Instant updatedAt;

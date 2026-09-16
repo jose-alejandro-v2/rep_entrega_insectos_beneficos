@@ -6,6 +6,7 @@ import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.nullValue;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -166,6 +167,53 @@ class UsuarioResourceTest {
                 .then().statusCode(400).body("codigo", is("DATOS_INVALIDOS"));
     }
 
+    // ------------------------------------------------------------------
+    // Correo (HITO-018): crear con email (normaliza), duplicado e invalido
+    // ------------------------------------------------------------------
+
+    @Test
+    void crear_conEmail_devuelveEmailNormalizadoEnMinusculas() {
+        Map<String, Object> body = TestSupport.crearBody("correo_v2", "Correo V2", TestSupport.ROL_USUARIO_ID);
+        body.put("email", "  Jose.Sanidad@VanguardFresh.PE  ");
+        Response r = given().auth().oauth2(TestSupport.seedToken())
+                .contentType(ContentType.JSON).body(body)
+                .post("/api/v1/usuarios");
+        r.then().statusCode(201)
+                .body("email", is("jose.sanidad@vanguardfresh.pe"));
+
+        // Limpieza: inactivar el usuario creado (estado consistente de la BD compartida)
+        TestSupport.eliminarComoSeed(r.jsonPath().getLong("id")).then().statusCode(200);
+    }
+
+    @Test
+    void crear_emailInvalido_devuelve400() {
+        Map<String, Object> body = TestSupport.crearBody("correo_mal_v2", "Correo Mal V2", TestSupport.ROL_USUARIO_ID);
+        body.put("email", "correo-sin-arroba");
+        given().auth().oauth2(TestSupport.seedToken())
+                .contentType(ContentType.JSON).body(body)
+                .post("/api/v1/usuarios")
+                .then().statusCode(400).body("codigo", is("CORREO_INVALIDO"));
+    }
+
+    @Test
+    void crear_emailDuplicado_devuelve409() {
+        Map<String, Object> body = TestSupport.crearBody("correo_dup_v2", "Correo Dup V2", TestSupport.ROL_USUARIO_ID);
+        body.put("email", "repetido@vanguardfresh.pe");
+        Response primero = given().auth().oauth2(TestSupport.seedToken())
+                .contentType(ContentType.JSON).body(body)
+                .post("/api/v1/usuarios");
+        primero.then().statusCode(201);
+
+        Map<String, Object> bodyDup = TestSupport.crearBody("correo_dup2_v2", "Correo Dup2 V2", TestSupport.ROL_USUARIO_ID);
+        bodyDup.put("email", "REPETIDO@vanguardfresh.pe"); // case-insensitive -> 409
+        given().auth().oauth2(TestSupport.seedToken())
+                .contentType(ContentType.JSON).body(bodyDup)
+                .post("/api/v1/usuarios")
+                .then().statusCode(409).body("codigo", is("CORREO_YA_EXISTE"));
+
+        TestSupport.eliminarComoSeed(primero.jsonPath().getLong("id")).then().statusCode(200);
+    }
+
     @Test
     void crear_adminPuedeCrearAdminYUsuario_peroNoSuperAdmin() {
         long adminId = TestSupport.crearUsuarioComoSeed("admin_crea_v2", "Admin Creador V2", TestSupport.ROL_ADMIN_ID);
@@ -249,6 +297,49 @@ class UsuarioResourceTest {
         given().auth().oauth2(TestSupport.seedToken()).contentType(ContentType.JSON).body(body)
                 .put("/api/v1/usuarios/" + TestSupport.SEED_ID)
                 .then().statusCode(400).body("codigo", is("SEED_SUPER_ADMIN_INMUNE"));
+    }
+
+    // ------------------------------------------------------------------
+    // Correo (HITO-018): actualizar email (asignar, cambiar y limpiar)
+    // ------------------------------------------------------------------
+
+    @Test
+    void actualizar_cambiaYLimpiaEmail_preservandoCuandoNull() throws Exception {
+        long id = TestSupport.crearUsuarioComoSeed("correo_upd_v2", "Correo Upd V2", TestSupport.ROL_USUARIO_ID);
+
+        // PUT null (campo ausente) -> preserva (null actual no cambia nada)
+        Map<String, Object> sinEmail = new HashMap<>();
+        sinEmail.put("usuario", "correo_upd_v2");
+        sinEmail.put("nombre", "Correo Upd V2");
+        sinEmail.put("rolId", TestSupport.ROL_USUARIO_ID);
+        sinEmail.put("estado", "ACTIVO");
+        given().auth().oauth2(TestSupport.seedToken()).contentType(ContentType.JSON).body(sinEmail)
+                .put("/api/v1/usuarios/" + id)
+                .then().statusCode(200).body("email", nullValue());
+
+        // PUT con email -> lo asigna normalizado
+        Map<String, Object> conEmail = new HashMap<>();
+        conEmail.put("usuario", "correo_upd_v2");
+        conEmail.put("nombre", "Correo Upd V2");
+        conEmail.put("rolId", TestSupport.ROL_USUARIO_ID);
+        conEmail.put("estado", "ACTIVO");
+        conEmail.put("email", "  Usuario@VanguardFresh.pe  ");
+        given().auth().oauth2(TestSupport.seedToken()).contentType(ContentType.JSON).body(conEmail)
+                .put("/api/v1/usuarios/" + id)
+                .then().statusCode(200).body("email", is("usuario@vanguardfresh.pe"));
+
+        // PUT email vacio -> limpia (null)
+        Map<String, Object> emailVacio = new HashMap<>();
+        emailVacio.put("usuario", "correo_upd_v2");
+        emailVacio.put("nombre", "Correo Upd V2");
+        emailVacio.put("rolId", TestSupport.ROL_USUARIO_ID);
+        emailVacio.put("estado", "ACTIVO");
+        emailVacio.put("email", "  ");
+        given().auth().oauth2(TestSupport.seedToken()).contentType(ContentType.JSON).body(emailVacio)
+                .put("/api/v1/usuarios/" + id)
+                .then().statusCode(200).body("email", nullValue());
+
+        TestSupport.eliminarComoSeed(id).then().statusCode(200);
     }
 
     // ------------------------------------------------------------------

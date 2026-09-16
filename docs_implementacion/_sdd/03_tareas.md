@@ -143,6 +143,9 @@ cada tarea cierra con verificación (Ley 5) y, al fin del HITO, auditoría integ
 | MO-021 | Liberación parcial acumulada: `Cantidad (millares)` = pendiente (`cantidad − Σ(papel+sobre)`), defaults por restante de presentación, validación `papel+sobre ≤ pendiente`, helpers en `utils/requerimientos.ts` + 15 tests | Alta | Completado (v1.12.0 / HITO-017) |
 | BE-015 | Backend cumplimiento producción: V14, entity, repository, DTO, resource, upsert | Alta | Completado (v1.7.0) |
 | BE-016 | Liberación por lote (V21) + plagas por liberación y `fechaLiberacion` editable (V22 `liberacion_plagas`), `CrearLiberacionRequest.plagas`, `LiberacionDto.plagas` | Alta | Completado (v1.12.0 / HITO-017) |
+| MO-022 | Notificaciones SMTP: campo "Correo electrónico" en Catálogos > Usuarios (crear/editar/limpiar, valida formato, reactivar preserva), `ApiClient` con `email` | Alta | Completado (v1.13.0 / HITO-018) |
+| BD-010 | Migración V23: `usuarios.email` (nullable + UNIQUE) para notificaciones | Alta | Completado (v1.13.0 / HITO-018) |
+| BE-017 | Notificaciones SMTP: `quarkus-mailer`, `NotificacionService` best-effort, evento publicar programación (reemplaza `println`), evento requerimiento ENTREGADO, `%test.quarkus.mailer.mock` (MockMailbox) | Alta | Completado (v1.13.0 / HITO-018) |
 
 ---
 

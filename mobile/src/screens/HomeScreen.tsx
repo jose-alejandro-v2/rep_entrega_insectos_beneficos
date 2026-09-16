@@ -101,6 +101,13 @@ export default function HomeScreen() {
             ))}
           </View>
         ))}
+
+        {/* Notificaciones (ADR-A004) */}
+        <MenuButton
+          label="Notificaciones"
+          screen="Notificaciones"
+          navigation={navigation}
+        />
       </ScrollView>
       <BottomNavigation active="Home" />
     </SafeAreaView>

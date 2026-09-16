@@ -1,9 +1,13 @@
 package pe.sistema.insectosbeneficos;
 
+import io.quarkus.mailer.Mail;
+import io.quarkus.mailer.MockMailbox;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
 import io.restassured.response.Response;
+import jakarta.inject.Inject;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -41,6 +45,14 @@ public class RequerimientoResourceTest {
     private static final long ETAPA_ID = 1L;
     private static final long PLAGA_ID = 1L;
     private static final String FECHA = "2026-08-24";
+
+    @Inject
+    MockMailbox mailbox;
+
+    @BeforeEach
+    void limpiarBandeja() {
+        mailbox.clear();
+    }
 
     // ------------------------------------------------------------------
     // Helpers
@@ -268,5 +280,49 @@ public class RequerimientoResourceTest {
           .then()
              .statusCode(200)
              .body("stock", notNullValue());
+    }
+
+    // ------------------------------------------------------------------
+    // 7. RF-166/RN-027 (HITO-018): al pasar a ENTREGADO se notifica por
+    //    correo al SOLICITANTE (el usuario que creo el requerimiento).
+    // ------------------------------------------------------------------
+
+    @Test
+    public void testActualizarAEntregado_notificaPorCorreoAlSolicitante() {
+        asegurarStockEspecie();
+
+        // Solicitante = usuario rol Usuario con email cargado.
+        Map<String, Object> bodyUser = TestSupport.crearBody("sol_entregado", "Solicitante Entregado", TestSupport.ROL_USUARIO_ID);
+        bodyUser.put("email", "solicitante@vanguardfresh.pe");
+        long solicitanteId = given().auth().oauth2(TestSupport.seedToken())
+                .contentType(ContentType.JSON).body(bodyUser)
+                .post("/api/v1/usuarios")
+                .then().statusCode(201)
+                .extract().jsonPath().getLong("id");
+
+        // El solicitante crea el requerimiento (creadoPor = solicitanteId).
+        long reqId = given().auth().oauth2(TestSupport.localLoginToken(solicitanteId, TestSupport.SEED_PASSWORD))
+                .contentType(ContentType.JSON)
+                .body(crearBody(new BigDecimal("10")))
+                .when().post("/api/v1/requerimientos")
+                .then().statusCode(201)
+                .extract().jsonPath().getLong("id");
+
+        // I+D (seed, admin) marca ENTREGADO.
+        Map<String, Object> body = actualizarBody(new BigDecimal("10"), "ENTREGADO");
+        body.put("papelConPostura", 5);
+        body.put("sobreConCascarilla", 5);
+        given().auth().oauth2(TestSupport.seedToken())
+                .contentType(ContentType.JSON).body(body)
+                .when().put("/api/v1/requerimientos/" + reqId)
+                .then().statusCode(200)
+                .body("estado", is("ENTREGADO"));
+
+        // El correo de notificacion llego al solicitante (RF-166).
+        List<Mail> mails = mailbox.getMessagesSentTo("solicitante@vanguardfresh.pe");
+        assert mails != null && !mails.isEmpty() : "Debio enviarse correo al solicitante";
+        assert mails.get(0).getSubject() != null
+                && mails.get(0).getSubject().toLowerCase().contains("entregado")
+                : "El asunto debe mencionar la entrega: " + mails.get(0).getSubject();
     }
 }

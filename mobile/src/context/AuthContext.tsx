@@ -17,6 +17,7 @@ import {
   setUnauthorizedHandler,
   type AuthUser,
 } from '../services/ApiClient';
+import NotificationService from '../services/NotificationService';
 
 interface AuthContextType {
   /** Usuario decodificado del JWT (null = sin sesión). */
@@ -59,6 +60,8 @@ export function AuthProvider({children}: {children: React.ReactNode}) {
           const parsed = parseToken(token);
           if (parsed) {
             setUser(parsed);
+            // Inicializar notificaciones push si hay sesión persistida
+            NotificationService.initialize(Number(parsed.sub));
           } else {
             await clearToken();
           }
@@ -88,7 +91,13 @@ export function AuthProvider({children}: {children: React.ReactNode}) {
     try {
       const data = await localLogin(usuarioId, password);
       await setToken(data.token);
-      setUser(parseToken(data.token));
+      const parsed = parseToken(data.token);
+      setUser(parsed);
+
+      // Inicializar notificaciones push (ADR-A004)
+      if (parsed?.sub) {
+        NotificationService.initialize(Number(parsed.sub));
+      }
     } catch (err) {
       setError(extractErrorMessage(err));
     }
@@ -112,6 +121,8 @@ export function AuthProvider({children}: {children: React.ReactNode}) {
   );
 
   const logout = useCallback(() => {
+    // Limpiar notificaciones push (ADR-A004)
+    NotificationService.cleanup().catch(() => {});
     clearToken().catch(() => {});
     setUser(null);
     setError(null);

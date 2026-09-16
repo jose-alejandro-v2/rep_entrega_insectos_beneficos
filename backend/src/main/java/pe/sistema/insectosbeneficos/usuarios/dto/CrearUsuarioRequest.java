@@ -28,4 +28,8 @@ public class CrearUsuarioRequest {
     @Pattern(regexp = "[0-9]+", message = "El DNI debe ser numérico (solo dígitos 0-9)")
     @Size(max = 8, message = "El DNI no puede superar 8 dígitos")
     public String dni;
+
+    /** Correo opcional para notificaciones (HITO-018). El service lo normaliza
+     *  (trim + lowercase), valida formato y unicidad; vacio/null = sin correo. */
+    public String email;
 }

@@ -38,11 +38,12 @@ convenciones de documentación y coordinación de agentes.
 | Capa | Tecnología |
 |---|---|
 | Autenticación | **JWT local** (tabla `usuarios` + super admin). Descartados: Microsoft Entra ID / OAuth / OIDC / Firebase |
-| Backend | Quarkus (Java), PostgreSQL + Flyway, iText PDF, envío de correos SMTP |
+| Backend | Quarkus (Java), PostgreSQL + Flyway, iText PDF, envío de correos SMTP (relay interno `10.13.10.10:25`) |
 | Mobile | React Native CLI + Gradle (NO Expo/EAS), React Navigation, react-native-paper (MD3), React Hook Form + Zod |
 | Web | React 18 + Vite + MUI |
 | Infra | Docker / Docker Compose, Nginx, GitHub Actions, VPS Linux |
 | Almacenamiento evidencias | Filesystem server + metadatos inmutables (sin Firebase) |
+| Notificaciones push | **Firebase Cloud Messaging (FCM)** — autorizado por ADR-A004 (solo `firebase-admin` backend + `@react-native-firebase/messaging` mobile) |
 
 ## 2.1 Herramientas de documentación
 
@@ -68,8 +69,8 @@ AGENTS.md
 README.md
 docker-compose.yml              (proyecto `repo_registro_insectos_beneficos`: postgres:16 + backend + nginx)
 nginx/nginx.conf                (proxy 8080 → backend:6101)
-backend/                     (API Quarkus v2 — auth/usuarios bajo /api/v1, Flyway V1-V22, Dockerfile multi-stage,
-                              95 tests; imagen `repo_registro_insectos_beneficos-backend`, TZ America/Lima)
+backend/                     (API Quarkus v2 — auth/usuarios bajo /api/v1, Flyway V1-V25, Dockerfile multi-stage,
+                              102 tests; imagen `repo_registro_insectos_beneficos-backend`, TZ America/Lima)
 mobile/                      (React Native CLI 0.86 / React 19.2.3 — auth v2: login 3 pasos,
                               ApiClient.ts + keychain, ServerCheck/Settings, 127 tests)
 web/                         (React + Vite — pendiente de scaffold)
@@ -95,9 +96,11 @@ docs_implementacion/
 
 `backend/` es la API Quarkus v2 (auth/usuarios bajo `/api/v1`, login 3 pasos rol→usuario→DNI,
 tabla `roles` + `usuarios.rol_id` V3, Super Admin id=1 inmune, 32 tests con Testcontainers,
-multi-select lotes/plagas V19 + fotos BYTEA en BD V20, 95 tests con Testcontainers);
+multi-select lotes/plagas V19 + fotos BYTEA en BD V20 + email de usuarios V23
+(notificaciones SMTP), 102 tests con Testcontainers);
 `mobile/` es la app RN CLI v2 (`src/services/ApiClient.ts` → `/api/v1`, token y URL en SecureStore
-vía keychain, ServerCheck/Settings de URL runtime, login 3 pasos, 127 tests).
+vía keychain, ServerCheck/Settings de URL runtime, login 3 pasos, NotificationService FCM,
+NotificacionesScreen, 145 tests).
 **HITO-001 = Infraestructura base** (cerrado) y **HITO-002 = Auth v2** (ver §7).
 El backend corre dockerizado (compose proyecto `repo_registro_insectos_beneficos`): postgres:16 +
 imagen `repo_registro_insectos_beneficos-backend` (puerto 6101) + nginx (proxy 8080 → 6101),
@@ -105,7 +108,9 @@ zona horaria `America/Lima` en el contenedor (HITO-016).
 
 ## 4. No usar (prohibido por decisión vigente)
 
-- Microsoft Entra ID / OAuth / OIDC / Firebase (autenticación, evidencias o notificaciones push).
+- Microsoft Entra ID / OAuth / OIDC (autenticación).
+- Firebase Auth / Firestore / Storage (evidencias o backend).
+- Firebase FCM **sí está permitido** para notificaciones push (autorizado por ADR-A004; solo `firebase-admin` backend + `@react-native-firebase/messaging` mobile).
 - Expo / EAS para mobile.
 - Rebasear el historial con fines estéticos (Ley 2).
 - Inventar gates fuera del catálogo del perfil auditor.
@@ -244,6 +249,32 @@ y reportar al Orchestrator; no "arreglarlo" en silencio.
   `CrearLiberacionRequest.plagas`, `fechaLiberacion` editable (requerimiento toma la fecha de la
   liberación). Versión **1.12.0** / versionCode 16. Mobile: 144 tests (132 pass / 12 pre-existentes
   verificados contra HEAD) · Backend: 95 tests (0 fallas).
+- **v1.13.0 (2026-09-14) = Notificaciones por correo SMTP + email en usuarios (V23)**:
+  Se conectan los correos que la spec exige (RF-137/146/166, RN-018/027/039, RNF-013) sobre
+  `usuarios.email` (migración **V23**, nullable + UNIQUE). Evento 1: `publicarProgramacion`
+  notifica por correo a TODOS los usuarios rol **Usuario** activos con email (reemplaza el antiguo
+  `System.out.println` falso). Evento 2: al pasar un requerimiento a **ENTREGADO** se notifica al
+  **solicitante** (`creado_por`). Backend: `quarkus-mailer`, `NotificacionService` **best-effort**
+  (un fallo SMTP se loguea, NUNCA rompe la transacción), credenciales solo por env
+  `QUARKUS_MAILER_*` (Microsoft 365 `smtp.office365.com:587` + STARTTLS REQUIRED; dev sin env →
+  Mailpit automático; tests con MockMailbox `%test.quarkus.mailer.mock=true`). Mobile: campo
+  **"Correo electrónico"** en Catálogos > Usuarios (crear/editar/limpiar; valida formato y
+  duplicado; reactivar preserva el correo). Versión **1.13.0** / versionCode 17. Mobile: 145 tests
+  (133 pass / 12 pre-existentes verificados contra HEAD) · Backend: 102 tests (0 fallas). Sin commit
+  (indicación del responsable en la sesión; el cierre queda pendiente del Orchestrator).
+- **v1.14.0 (2026-09-16) = Notificaciones multi-canal + Firebase FCM + Notificaciones in-app**:
+  Ampliación del HITO-018 con tres componentes: (1) **SMTP relay interno** — migración de
+  Microsoft 365 (`smtp.office365.com:587`, bloqueado) a Exchange interno (`10.13.10.10:25`,
+  sin TLS, sin AUTH, relay abierto en red interna). Verificado con curl desde contenedor
+  (`250 2.6.0 Queued mail for delivery`). (2) **Firebase Cloud Messaging** — autorizado por
+  ADR-A004. Backend: `FirebasePushService` (Firebase Admin SDK) + `DispositivoToken` entity
+  (V24). Mobile: `@react-native-firebase/app` + `@react-native-firebase/messaging` v26
+  (modular API), `NotificationService.ts`, `NotificacionesScreen.tsx`. (3) **Notificaciones
+  in-app** — tabla `notificaciones` (V25), entity, repository, resource, DTO. `NotificacionService`
+  persiste notificación por usuario en cada evento (además de email + push). 4 eventos:
+  programación publicada (broadcast), requerimiento creado (broadcast), cambio de estado
+  (dirigido), requerimiento entregado (dirigido + email). Versión **1.14.0** / versionCode 18.
+  Mobile: 145 tests · Backend: 102 tests (0 fallas).
 - Los hitos se cierran con **auditoría integral PASS + verificación + `05_hito_NNN.md` + commit** coherente.
 - `versionHistory.js` es la fuente del historial visible al usuario (mobile existente); web la adoptará.
 

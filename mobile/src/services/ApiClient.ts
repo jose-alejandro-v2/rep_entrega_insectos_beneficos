@@ -396,6 +396,8 @@ export interface UsuarioDto {
   estado: 'ACTIVO' | 'INACTIVO';
   debeCambiarPassword: boolean;
   dni: string | null;
+  /** Correo para notificaciones (HITO-018); null si no cargado. */
+  email: string | null;
   creadoPor: number | null;
   createdAt: string;
   updatedAt: string;
@@ -408,6 +410,8 @@ export interface CrearUsuarioRequest {
   nombre: string;
   rolId: number;
   dni?: string;
+  /** Correo opcional para notificaciones (HITO-018). */
+  email?: string;
 }
 
 /** Cuerpo de PUT /api/v1/usuarios/{id} (no permite cambiar dni ni password). */
@@ -416,6 +420,8 @@ export interface ActualizarUsuarioRequest {
   nombre: string;
   rolId: number;
   estado: 'ACTIVO' | 'INACTIVO';
+  /** null = preserva el actual; string vacío = lo limpia (HITO-018). */
+  email?: string | null;
 }
 
 export async function listarUsuarios(

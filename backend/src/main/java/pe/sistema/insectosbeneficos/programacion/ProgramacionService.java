@@ -3,6 +3,7 @@ package pe.sistema.insectosbeneficos.programacion;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+import pe.sistema.insectosbeneficos.notificaciones.NotificacionService;
 import pe.sistema.insectosbeneficos.programacion.dto.ProgramacionDto;
 import pe.sistema.insectosbeneficos.programacion.dto.UpdateProgramacionRequest;
 import pe.sistema.insectosbeneficos.seguridad.ApiException;
@@ -29,6 +30,9 @@ public class ProgramacionService {
 
     @Inject
     ProgramacionMapper mapper;
+
+    @Inject
+    NotificacionService notificacionService;
 
     public List<ProgramacionDto> getProgramaciones(Integer anio, Integer mes) {
         return programacionRepository.findByAnioAndMes(anio, mes).stream()
@@ -164,7 +168,10 @@ public class ProgramacionService {
             d.setEstado("PUBLICADO");
         }
 
-        System.out.println("Email sent: Programación " + id + " publicada.");
+        // HITO-018: correo real a Sanidad (RF-137/146, RN-018/039). Best-effort:
+        // un fallo de SMTP se loguea en NotificacionService y NUNCA rompe la
+        // publicacion (antes esto era un System.out.println falso).
+        notificacionService.notificarProgramacionPublicada(p);
         return mapper.toDto(p);
     }
 

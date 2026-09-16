@@ -26,4 +26,7 @@ public class ActualizarUsuarioRequest {
 
     @NotNull(message = "El estado es obligatorio")
     public EstadoUsuario estado;
+
+    /** Correo para notificaciones (HITO-018). null o vacio limpia el correo. */
+    public String email;
 }

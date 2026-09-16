@@ -45,6 +45,7 @@ export type RootStackParamList = {
   LiberacionList: {requerimientoId: number};
   LiberacionForm: {requerimientoId: number};
   DetalleRequerimiento: {id: number};
+  Notificaciones: undefined;
 };
 
 /**
@@ -55,4 +56,5 @@ export type MenuScreen =
   | 'NuevoRequerimiento'
   | 'HistorialRequerimiento'
   | 'Programacion'
-  | 'SolicitudRequerimientos';
+  | 'SolicitudRequerimientos'
+  | 'Notificaciones';

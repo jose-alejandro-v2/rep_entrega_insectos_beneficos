@@ -6,6 +6,27 @@
 
 const versionHistory = [
   {
+    version: '1.14.0',
+    fecha: '2026-09-16',
+    cambios: [
+      'Notificaciones multi-canal: correo SMTP (relay interno Exchange) + push FCM + notificaciones in-app.',
+      'Firebase Cloud Messaging (FCM): el backend envía notificaciones push a todos los usuarios con token registrado.',
+      'Centro de notificaciones in-app: nueva pantalla "Notificaciones" accesible desde Home para todos los perfiles.',
+      'Los correos ahora se envían desde el relay interno de la empresa (puerto 25, sin autenticación).',
+      '4 eventos de notificación: programación publicada, requerimiento creado, cambio de estado, requerimiento entregado.',
+    ],
+  },
+  {
+    version: '1.13.0',
+    fecha: '2026-09-14',
+    cambios: [
+      'Notificaciones por correo: la programación publicada se notifica por email a los usuarios de Sanidad (Usuario) que tengan correo cargado.',
+      'Al marcar un requerimiento como Entregado, el solicitante recibe un correo automático.',
+      'Catálogos > Usuarios: nuevo campo "Correo electrónico" (opcional) para recibir las notificaciones; se puede cargar, corregir o limpiar.',
+      'El correo se valida (formato y no duplicado) y se guarda normalizado en minúsculas.',
+    ],
+  },
+  {
     version: '1.12.0',
     fecha: '2026-09-14',
     cambios: [

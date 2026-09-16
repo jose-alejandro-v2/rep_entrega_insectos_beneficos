@@ -30,6 +30,8 @@ import {
   extractErrorMessage,
   fetchRoles,
   listarUsuarios,
+  type ActualizarUsuarioRequest,
+  type CrearUsuarioRequest,
   type RolDto,
   type UsuarioDto,
 } from '../services/ApiClient';
@@ -82,6 +84,7 @@ interface FormFields {
   usuario: string;
   nombre: string;
   rolId: number | null;
+  email: string;
 }
 
 interface UsuarioFormModalProps {
@@ -111,6 +114,7 @@ function UsuarioFormModal({
   const [usuario, setUsuario] = useState('');
   const [nombre, setNombre] = useState('');
   const [rolId, setRolId] = useState<number | null>(null);
+  const [email, setEmail] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
 
   const opcionesRol = useMemo(
@@ -126,10 +130,12 @@ function UsuarioFormModal({
       setUsuario(editando.usuario);
       setNombre(editando.nombre);
       setRolId(editando.rolId);
+      setEmail(editando.email ?? '');
     } else {
       setUsuario('');
       setNombre('');
       setRolId(opcionesRol[0]?.id ?? null);
+      setEmail('');
     }
     setFormError(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -145,13 +151,21 @@ function UsuarioFormModal({
       setFormError('Seleccione un perfil');
       return;
     }
+    const correo = email.trim();
+    if (
+      correo &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)
+    ) {
+      setFormError('El correo electrónico no es válido');
+      return;
+    }
     // En creación no se pide Nombre: se inicializa con el usuario.
     const n = editando ? nombre.trim() : u;
     if (editando && !n) {
       setFormError('El nombre es obligatorio');
       return;
     }
-    onSave({usuario: u, nombre: n, rolId});
+    onSave({usuario: u, nombre: n, rolId, email: correo});
   };
 
   return (
@@ -184,6 +198,18 @@ function UsuarioFormModal({
                 accessibilityLabel="Campo nombre"
               />
             ) : null}
+            <AppInput
+              label="Correo electrónico"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              accessibilityLabel="Campo correo electrónico"
+            />
+            <Text style={styles.hint}>
+              Correo para notificaciones del sistema (opcional).
+            </Text>
             <Text style={styles.inputLabel}>Perfil</Text>
             <View style={styles.rolRow}>
               {opcionesRol.map(r => {
@@ -341,6 +367,8 @@ export default function CatalogosScreen() {
           nombre: target.nombre,
           rolId: target.rolId,
           estado: 'ACTIVO',
+          // Reactivar no debe limpiar el correo (HITO-018).
+          email: target.email ?? null,
         });
         setNotificacion({
           tipo: 'ok',
@@ -356,22 +384,29 @@ export default function CatalogosScreen() {
   const guardarFormulario = async (fields: FormFields) => {
     try {
       if (form?.editando) {
-        await actualizarUsuario(form.editando.id, {
+        const payload: ActualizarUsuarioRequest = {
           usuario: fields.usuario,
           nombre: fields.nombre,
           rolId: fields.rolId as number,
           estado: form.editando.estado,
-        });
+        };
+        // Email: vacío limpia (backend); ausente/null preserva el actual.
+        payload.email = fields.email;
+        await actualizarUsuario(form.editando.id, payload);
         setNotificacion({
           tipo: 'ok',
           texto: 'Usuario actualizado correctamente',
         });
       } else {
-        await crearUsuario({
+        const payload: CrearUsuarioRequest = {
           usuario: fields.usuario,
           nombre: fields.nombre,
           rolId: fields.rolId as number,
-        });
+        };
+        if (fields.email) {
+          payload.email = fields.email;
+        }
+        await crearUsuario(payload);
         setNotificacion({
           tipo: 'ok',
           texto:
@@ -436,6 +471,9 @@ export default function CatalogosScreen() {
                 <View style={styles.userTitle}>
                   <Text style={styles.userName}>{u.nombre}</Text>
                   <Text style={styles.userLogin}>@{u.usuario}</Text>
+                  {u.email ? (
+                    <Text style={styles.userEmail}>{u.email}</Text>
+                  ) : null}
                 </View>
                 <StatusChip
                   tone="info"
@@ -747,6 +785,12 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.body2.fontSize,
     color: theme.colors.text.secondary,
     marginTop: 2,
+  },
+  userEmail: {
+    fontFamily: theme.typography.caption.fontFamily,
+    fontSize: theme.typography.caption.fontSize,
+    color: theme.colors.text.tertiary,
+    marginTop: 1,
   },
   userMeta: {
     flexDirection: 'row',

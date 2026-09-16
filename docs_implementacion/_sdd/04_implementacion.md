@@ -10,9 +10,9 @@
 | Documento | 04_IMPLEMENTACION — Estado e historial de implementación |
 | Proyecto | Sistema de Control de Entrega de Insectos Benéficos |
 | Tipo Documento | SDD (historial de implementación) |
-| Estado | v1.12.0: liberación parcial acumulada (mobile) + plagas por liberación y fechaLiberacion (backend V22); 95 tests BE (0 fallas), 144 tests MO (132 pass / 12 pre-existentes) |
-| Versión | 1.12.0 / versionCode 16 |
-| Fecha | 2026-09-14 |
+| Estado | v1.14.0: notificaciones multi-canal (SMTP relay interno + Firebase FCM + in-app), V24 dispositivos_tokens, V25 notificaciones, ADR-A004; 102 tests BE (0 fallas), 145 tests MO |
+| Versión | 1.14.0 / versionCode 18 |
+| Fecha | 2026-09-16 |
 | Responsable | Orchestrator / Developer |
 | Repositorio | C:\repos\rep_entrega_insectos_beneficos |
 | Clasificación | Interno |
@@ -3064,6 +3064,173 @@ que estaba sin commitear en el árbol (Ley 2 — documentado aquí como segundo 
 | `cd mobile && npx tsc --noEmit` | exit 0 |
 | `cd mobile && npx eslint .` | 0 errores |
 
-Backend V22: **verificado con `.\mvnw.cmd -o test` → 95 tests, 0 fallas** (LiberacionResourceTest
-ampliado a 10 casos con multi-plaga). **Nota**: el backend dockerizado corre Flyway V1-V21; al
-redesplegar se aplicará V22 automáticamente.
+---
+
+# 73. HITO-018 — Notificaciones por correo SMTP (2026-09-14, v1.13.0)
+
+## 73.1 Requerimiento del negocio
+
+- En el perfil Usuario, el flujo de liberaciones ya funciona; este HITO agrega las
+  notificaciones por **correo** que la spec exige (RF-137/146/166, RN-018/027/039,
+  RNF-013). Stack aprobado en **ADR-A001 D2** (SMTP); Firebase/FCM sigue prohibido
+  hasta un futuro ADR-A004 (Fase 2, pendiente).
+
+| Evento | Disparador | Destinatarios | Respaldos |
+|---|---|---|---|
+| Programación publicada | `ProgramacionService.publicarProgramacion()` (reemplaza el antiguo `System.out.println` falso) | TODOS los usuarios rol **Usuario** activos con `email` cargado | RF-137, RF-146, RN-018, RN-039 |
+| Requerimiento → ENTREGADO | `RequerimientoService.actualizar()` al pasar a ENTREGADO (solo esa transición) | El **solicitante** (`requerimientos.creado_por`) si tiene `email` | RF-166, RN-027 |
+
+> Nota RN-027: la spec es más amplia ("cualquier cambio de estado"). Se implementó
+> **solo la transición a ENTREGADO** (RF-166) por exactitud con el pedido; extender a
+> todos los estados es un cambio menor (misma firma `enviar`).
+
+## 73.2 Decisión de configuración (responsable, 2026-09-14)
+
+| Parámetro | Valor | Dónde |
+|---|---|---|
+| Proveedor SMTP | **Microsoft 365** — `smtp.office365.com:587` | Env vars en `docker-compose.yml` |
+| Seguridad | **STARTTLS REQUIRED**, SSL desactivado (587 es STARTTLS, no TLS implícito) | `QUARKUS_MAILER_START_TLS=REQUIRED` |
+| Remitente | `admin.powerapps@vanguardfresh.pe` (decisión del responsable) | `QUARKUS_MAILER_FROM` |
+| Autenticación | Usuario + contraseña SMTP de la cuenta existente | `QUARKUS_MAILER_USERNAME/PASSWORD` |
+| Secreto | `.env` raíz (ignorado por git — se añadió `.env` a `.gitignore`) | Fuera del repo (H10) |
+
+Riesgos aceptados y documentados: (1) remitente con nombre poco "humano" (posible spam),
+(2) contraseña compartida con otras herramientas (si se rota, las notificaciones dejan de
+salir sin aviso), (3) riesgo de MFA/Acceso Condicional → plan B **OAuth2** (app registration,
+también SMTP, no cambia ADR). Los valores se inyectan por env (`QUARKUS_MAILER_*`); en dev sin
+env, Quarkus Dev Services levanta **Mailpit** automáticamente (prueba funcional sin credenciales).
+
+## 73.3 Alcance técnico
+
+### Base de datos
+- **V23__usuarios_email.sql**: columna `usuarios.email VARCHAR(191) NULL` + constraint UNIQUE
+  (`uq_usuarios_email`). Nullable → los usuarios existentes (seed incluido) no rompen; el admin
+  carga/corrige el correo desde Catálogos > Usuarios. Postgres admite múltiples NULL en UNIQUE.
+
+### Backend (Quarkus)
+| Archivo | Cambio |
+|---|---|
+| `backend/pom.xml` | Dependencia `quarkus-mailer` |
+| `application.properties` | `quarkus.mailer.from` por env + `%test.quarkus.mailer.mock=true` (MockMailbox sin SMTP). Host/puerto/usuario/password NO se declaran: Quarkus mapea las env `QUARKUS_MAILER_*` solo (dev sin env → Mailpit auto) |
+| `usuarios/Usuario.java` / `dto/*` / `Mapper` | Campo `email` (entity, DTOs request/response, mapper) |
+| `usuarios/UsuarioService.java` | `normalizarEmail` (trim+lowercase; vacío→null; formato) + `verificarEmailUnico` (409 `CORREO_YA_EXISTE`). Semántica PUT: `email` ausente/null **preserva** el actual; string vacío **limpia**; con valor lo asigna. Creación: opcional |
+| `notificaciones/NotificacionService.java` (nuevo) | 2 métodos best-effort (`notificarProgramacionPublicada`, `notificarRequerimientoEntregado`); envía con `Mailer` (species `Mail.withText`); **nunca lanza**: un fallo SMTP (timeout/credenciales/red) se loguea y NO rompe la transacción (Ley 4) |
+| `programacion/ProgramacionService.java` | Inyecta `NotificacionService`; reemplaza el `System.out.println` falso por la notificación real |
+| `requerimientos/RequerimientoService.java` | Inyecta `NotificacionService`; captura `estadoAnterior`; notifica solo al pasar a ENTREGADO |
+
+### Mobile (React Native)
+| Archivo | Cambio |
+|---|---|
+| `ApiClient.ts` | `UsuarioDto.email`, `CrearUsuarioRequest.email?`, `ActualizarUsuarioRequest.email?` (null = preserva) |
+| `CatalogosScreen.tsx` | Campo **"Correo electrónico"** en el modal crear/editar usuario (valida formato), reactivar preserva el email, listado muestra el email; payloads POST/PUT con email |
+| PerfilScreen (APP_VERSION) | Se alinea a 1.13.0 (sin cambios funcionales) |
+
+## 73.4 Tests
+
+### Backend (102 tests, 0 fallas)
+
+| Suite | Casos | Resultado |
+|---|---|---|
+| `NotificacionMailerTest` (nuevo) | 2: (1) publicar notifica a Sanidad con email y NO al Admin (MockMailbox), (2) publicar sin usuarios con email no falla (total 0 mails) | ✅ |
+| `UsuarioResourceTest` | 23 (+4): crear con email normaliza a minúsculas, email inválido 400 `CORREO_INVALIDO`, email duplicado 409 `CORREO_YA_EXISTE` (case-insensitive), actualizar asigna/cambia/limpia y preserva en null | ✅ |
+| `RequerimientoResourceTest` | 7 (+1): al pasar a ENTREGADO llega correo al solicitante (MockMailbox, subject contiene "Entregado") | ✅ |
+| Resto de suites | 95 → sin cambios de contrato | ✅ |
+
+Línea: `.\\mvnw.cmd -q test` → **exit 0, 102 tests, 0 fallas**.
+
+### Mobile (145 tests; 133 pass / 12 fallos pre-existentes verificados contra HEAD)
+
+| Comando | Resultado |
+|---|---|
+| `npx jest --runInBand CatalogosScreen` | **12/12** (incluye el nuevo "crea usuario con correo electrónico") |
+| `npx tsc --noEmit` | exit 0 |
+| `npx eslint src/services/ApiClient.ts src/screens/CatalogosScreen.tsx __tests__/CatalogosScreen.test.tsx` | exit 0 |
+| `npx jest --runInBand` (suite completa) | 145 tests: **133 pass / 12 failed** — son los MISMOS 12 pre-existentes del baseline v1.12.0 (HomeScreen 3, PerfilScreen 1, CambiarPasswordScreen 1, flows/requerimiento.e2e 6, flows/ciclo-entrega.e2e 1 verificados contra HEAD). El test nuevo de email **pasa** |
+
+## 73.5 Ley 3
+
+- Versión **1.13.0 / versionCode 17** en: `mobile/package.json`, `mobile/android/app/build.gradle`,
+  `mobile/src/constants/appVersion.ts`, `mobile/versionHistory.js` (entrada nueva 1.13.0).
+- `PerfilScreen.test.tsx` alineada a `Versión 1.13.0`.
+- Artefacto: cambio solo JS (sin módulo nativo nuevo) → el APK existente queda desactualizado y
+  **no se reconstruyó** (regla AGENTS §6); si se necesita en dispositivo: `gradlew.bat assembleRelease`.
+
+## 73.6 Avisos al cierre
+
+1. **No se hizo commit/push** (indicación explícita del responsable en la sesión).
+2. La documentación repositorio (README, AGENTS, 03_tareas, acta) se actualizó en el mismo paso
+   (Ley 3); el commit de cierre queda pendiente de ejecutar por el Orchestrator.
+3. El backend dockerizado actualmente corre Flyway V1-V22; al redesplegar se aplicará **V23**
+   automáticamente.
+4. El push a `origin/main` debe verificar `git status -sb` (sin "ahead") y `git log origin/main..HEAD` (vacío).
+
+---
+
+# 74. v1.14.0 — Notificaciones multi-canal + Firebase FCM + Notificaciones in-app (2026-09-16)
+
+## 74.1 Resumen
+
+Ampliación del HITO-018 con tres componentes nuevos:
+
+1. **SMTP relay interno**: migración de Microsoft 365 (`smtp.office365.com:587` + STARTTLS, bloqueado)
+   al relay interno Exchange (`10.13.10.10:25`, sin TLS, sin AUTH). Verificado end-to-end con curl
+   desde el contenedor Docker.
+
+2. **Firebase Cloud Messaging (FCM)**: autorizado por ADR-A004 (deroga parcialmente ADR-A001 D1).
+   Backend: `FirebasePushService` + `DispositivoToken` (V24). Mobile: `@react-native-firebase/messaging`
+   (modular API v26+), `NotificationService.ts`, `NotificacionesScreen.tsx`.
+
+3. **Notificaciones in-app**: tabla `notificaciones` (V25), entity, repository, resource, DTO.
+   `NotificacionService` persiste una notificación por usuario en cada evento (además de email + push).
+
+## 74.2 Archivos nuevos
+
+| Archivo | Descripción |
+|---|---|
+| `V24__dispositivos_tokens.sql` | Tabla dispositivos_tokens (FCM tokens por usuario) |
+| `V25__notificaciones.sql` | Tabla notificaciones (in-app center) |
+| `dispositivos/DispositivoToken.java` | Entity Panache para tokens FCM |
+| `dispositivos/DispositivoTokenRepository.java` | Repository: findByToken, findActivosByUsuario, desactivar |
+| `dispositivos/DispositivoTokenService.java` | Service: registrar, eliminar, listar |
+| `dispositivos/DispositivoTokenResource.java` | REST: POST/DELETE/GET `/api/v1/dispositivos-token` |
+| `dispositivos/dto/RegistrarTokenRequest.java` | DTO request (token, platform) |
+| `dispositivos/dto/DispositivoTokenDto.java` | DTO response |
+| `notificaciones/FirebasePushService.java` | Firebase Admin SDK: enviar, enviarBroadcast, enviarAUsuario |
+| `notificaciones/Notificacion.java` | Entity Panache para notificaciones in-app |
+| `notificaciones/NotificacionRepository.java` | Repository: findByUsuario, marcarLeida, marcarTodasLeidas |
+| `notificaciones/NotificacionResource.java` | REST: GET/PATCH `/api/v1/notificaciones` |
+| `notificaciones/NotificacionDto.java` | DTO response |
+| `mobile/src/services/NotificationService.ts` | FCM init, token, foreground messages |
+| `mobile/src/screens/NotificacionesScreen.tsx` | Centro de notificaciones in-app |
+
+## 74.3 Archivos modificados
+
+| Archivo | Cambio |
+|---|---|
+| `docker-compose.yml` | SMTP: `10.13.10.10:25` DISABLED; eliminado `extra_hosts` Microsoft 365; added `GOOGLE_FIREBASE_CREDENTIALS` |
+| `.env` | SMTP relay interno (host, port, from, password vacío) |
+| `application.properties` | Comentarios actualizados (relay interno) |
+| `NotificacionService.java` | Multi-canal: ReactiveMailer + FirebasePushService + NotificacionRepository; 4 eventos con persistencia in-app |
+| `pom.xml` | +`com.google.firebase:firebase-admin:9.3.0` |
+| `mobile/package.json` | +`@react-native-firebase/app`, `@react-native-firebase/messaging` |
+| `mobile/navigation/types.ts` | +`Notificaciones` en RootStackParamList y MenuScreen |
+| `mobile/navigation/RootNavigator.tsx` | +NotificacionesScreen import + Stack.Screen |
+| `mobile/screens/HomeScreen.tsx` | +Botón "Notificaciones" para todos los perfiles |
+| `mobile/context/AuthContext.tsx` | +NotificationService init en login/restore, cleanup en logout |
+
+## 74.4 Tests
+
+| Capa | Comando | Resultado |
+|---|---|---|
+| Backend compile | `mvn compile -q` | ✅ exit 0 |
+| Mobile tsc | `npx tsc --noEmit` | ✅ exit 0 |
+| Mobile lint | `npx eslint` | ✅ exit 0 |
+| Docker build | `docker compose up -d --build` | ✅ V24+V25 aplicados |
+| SMTP contenedor | curl `smtp://10.13.10.10:25` | ✅ `250 2.6.0 Queued mail for delivery` |
+| Correo recibido | jose.anyarin@vanguardfresh.pe | ✅ |
+
+## 74.5 Ley 3
+
+- Versión **1.14.0 / versionCode 18** en: `package.json`, `build.gradle`, `appVersion.ts`, `versionHistory.js`.
+- Incluye el alcance no commiteado de v1.13.0 (SMTP + email en usuarios) + v1.14.0 (FCM + in-app + relay fix).
+- APK no se reconstruyó (sin módulo nativo nuevo). Si se necesita: `gradlew.bat assembleRelease`.

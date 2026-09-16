@@ -25,6 +25,7 @@ import RecepcionFormScreen from '../screens/RecepcionFormScreen';
 import LiberacionListScreen from '../screens/LiberacionListScreen';
 import LiberacionFormScreen from '../screens/LiberacionFormScreen';
 import DetalleRequerimientoScreen from '../screens/DetalleRequerimientoScreen';
+import NotificacionesScreen from '../screens/NotificacionesScreen';
 import {theme} from '../theme';
 import type {RootStackParamList} from './types';
 
@@ -171,6 +172,11 @@ export default function RootNavigator() {
               name="ConfigurarServidor"
               component={SettingsScreen}
               options={{title: 'Configurar servidor'}}
+            />
+            <Stack.Screen
+              name="Notificaciones"
+              component={NotificacionesScreen}
+              options={{headerShown: false}}
             />
           </>
         )}

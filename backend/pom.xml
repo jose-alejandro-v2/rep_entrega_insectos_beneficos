@@ -79,6 +79,17 @@
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-smallrye-openapi</artifactId>
         </dependency>
+        <!-- Correo SMTP (HITO-018: notificaciones por email) -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-mailer</artifactId>
+        </dependency>
+        <!-- Firebase Admin SDK (ADR-A004: notificaciones push FCM) -->
+        <dependency>
+            <groupId>com.google.firebase</groupId>
+            <artifactId>firebase-admin</artifactId>
+            <version>9.3.0</version>
+        </dependency>
         <!-- BCrypt (hash de contrasenas) -->
         <dependency>
             <groupId>at.favre.lib</groupId>

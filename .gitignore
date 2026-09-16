@@ -33,6 +33,7 @@ Thumbs.db
 # Environment
 mobile/.env
 mobile/.env.local
+.env
 
 # Keystore de firma de produccion (NUNCA subir a git) - H9
 mobile/android/keystore.properties

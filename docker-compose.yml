@@ -36,6 +36,19 @@ services:
       QUARKUS_DATASOURCE_JDBC_URL: jdbc:postgresql://postgres:5432/insectos_beneficos
       QUARKUS_DATASOURCE_USERNAME: insectos_dev
       QUARKUS_DATASOURCE_PASSWORD: insectos_dev_password_2026
+      # Mailer SMTP (HITO-018): valores desde .env raíz (NUNCA credenciales en git).
+      # Relay interno Exchange (SRVICDCPRI.vanguardfresh.pe) — validado 2026-09-16:
+      # IP 10.13.10.10, puerto 25, SIN TLS y SIN AUTH (relay abierto en red interna;
+      # el servidor NO ofrece AUTH en EHLO → username/password vacíos).
+      QUARKUS_MAILER_HOST: ${QUARKUS_MAILER_HOST:-10.13.10.10}
+      QUARKUS_MAILER_PORT: ${QUARKUS_MAILER_PORT:-25}
+      QUARKUS_MAILER_START_TLS: ${QUARKUS_MAILER_START_TLS:-DISABLED}
+      QUARKUS_MAILER_USERNAME: ${QUARKUS_MAILER_USERNAME:-}
+      QUARKUS_MAILER_PASSWORD: ${QUARKUS_MAILER_PASSWORD:-}
+      QUARKUS_MAILER_FROM: ${QUARKUS_MAILER_FROM:-notificaciones.noreply@vanguardfresh.com}
+      # Firebase FCM (ADR-A004: notificaciones push).
+      # Contenido JSON del service account o path al archivo.
+      GOOGLE_FIREBASE_CREDENTIALS: ${GOOGLE_FIREBASE_CREDENTIALS:-}
     ports:
       - "6101:6101"
     volumes:

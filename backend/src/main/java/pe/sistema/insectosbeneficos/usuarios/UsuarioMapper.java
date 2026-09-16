@@ -23,6 +23,7 @@ public class UsuarioMapper {
         d.estado = u.estado;
         d.debeCambiarPassword = u.debeCambiarPassword;
         d.dni = u.dni;
+        d.email = u.email;
         d.creadoPor = u.creadoPor;
         d.createdAt = u.createdAt;
         d.updatedAt = u.updatedAt;

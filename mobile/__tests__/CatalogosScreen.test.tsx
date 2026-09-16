@@ -67,6 +67,7 @@ const USUARIOS_JWT = [
     estado: 'ACTIVO',
     debeCambiarPassword: false,
     dni: '12345678',
+    email: 'jose.sanidad@vanguardfresh.pe',
     creadoPor: 1,
     createdAt: '2026-08-19T00:00:00Z',
     updatedAt: '2026-08-19T00:00:00Z',
@@ -81,6 +82,7 @@ const USUARIOS_JWT = [
     estado: 'INACTIVO',
     debeCambiarPassword: false,
     dni: '87654321',
+    email: null,
     creadoPor: 1,
     createdAt: '2026-08-19T00:00:00Z',
     updatedAt: '2026-08-20T09:00:00Z',
@@ -220,6 +222,8 @@ describe('CatalogosScreen — tab Usuarios (Super Admin)', () => {
 
     expect(contarTexto(tree, 'Nuevo usuario')).toBeGreaterThan(0);
     expect(findByLabel(tree, 'Campo usuario')).toBeTruthy();
+    // HITO-018: el modal pide correo (opcional) en creación y edición.
+    expect(findByLabel(tree, 'Campo correo electrónico')).toBeTruthy();
     // Creación: NO se pide Nombre ni DNI.
     expect(() => findByLabel(tree, 'Campo nombre')).toThrow();
     expect(() => findByLabel(tree, 'Campo DNI')).toThrow();
@@ -284,6 +288,56 @@ describe('CatalogosScreen — tab Usuarios (Super Admin)', () => {
     ).toBe(1);
   });
 
+  test('crea un usuario con correo electrónico (POST /usuarios con email)', async () => {
+    mockListados();
+    api.post.mockResolvedValue({data: {id: 5}});
+    const tree = await renderCatalogo(TOKEN_SUPER);
+    await act(async () => {
+      await flushPromises();
+    });
+
+    await act(async () => {
+      findByLabel(tree, 'Nuevo usuario').props.onPress();
+    });
+    await act(async () => {
+      await flushPromises();
+    });
+
+    await act(async () => {
+      findByLabel(tree, 'Campo usuario').props.onChangeText('maria.campo');
+    });
+    await act(async () => {
+      await flushPromises();
+    });
+    await act(async () => {
+      findByLabel(tree, 'Campo correo electrónico').props.onChangeText(
+        'maria.campo@vanguardfresh.pe',
+      );
+    });
+    await act(async () => {
+      await flushPromises();
+    });
+    await act(async () => {
+      findByLabel(tree, 'Perfil Usuario').props.onPress();
+    });
+    await act(async () => {
+      await flushPromises();
+    });
+    await act(async () => {
+      findByLabel(tree, 'Guardar usuario').props.onPress();
+    });
+    await act(async () => {
+      await flushPromises();
+    });
+
+    expect(api.post).toHaveBeenCalledWith('/usuarios', {
+      usuario: 'maria.campo',
+      nombre: 'maria.campo',
+      rolId: 3,
+      email: 'maria.campo@vanguardfresh.pe',
+    });
+  });
+
   test('edita un usuario con PUT /usuarios/{id} (DNI solo lectura, rol actual preservado)', async () => {
     mockListados();
     api.put.mockResolvedValue({data: {}});
@@ -317,6 +371,7 @@ describe('CatalogosScreen — tab Usuarios (Super Admin)', () => {
       nombre: 'José Sanidad 2',
       rolId: 3,
       estado: 'ACTIVO',
+      email: 'jose.sanidad@vanguardfresh.pe',
     });
   });
 
@@ -384,6 +439,7 @@ describe('CatalogosScreen — tab Usuarios (Super Admin)', () => {
       nombre: 'Ana Admin',
       rolId: 2,
       estado: 'ACTIVO',
+      email: null,
     });
     expect(
       contarTexto(tree, 'Usuario "ana.admin" reactivado correctamente'),

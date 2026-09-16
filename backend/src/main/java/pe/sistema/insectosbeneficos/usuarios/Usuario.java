@@ -74,6 +74,10 @@ public class Usuario extends PanacheEntityBase {
     /** DNI (VARCHAR(8) en BD: preserva ceros a la izquierda). */
     public String dni;
 
+    /** Correo para notificaciones SMTP (HITO-018). Nullable: se carga desde
+     *  Catálogos > Usuarios. Unico entre los usuarios que lo tengan (V23). */
+    public String email;
+
     @Enumerated(EnumType.STRING)
     public EstadoUsuario estado = EstadoUsuario.ACTIVO;
 
