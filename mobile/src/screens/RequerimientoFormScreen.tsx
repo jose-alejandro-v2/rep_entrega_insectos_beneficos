@@ -42,6 +42,7 @@ import ErrorState from '../components/ErrorState';
 import LoadingState from '../components/LoadingState';
 import MultiSelectField from '../components/MultiSelectField';
 import SelectField from '../components/SelectField';
+import MessageDialog from '../components/MessageDialog';
 import {usePhotoCapture} from '../hooks/usePhotoCapture';
 import {useRequerimientosCatalogos} from '../hooks/useRequerimientosCatalogos';
 import {useAuth} from '../context/AuthContext';
@@ -324,12 +325,6 @@ export default function RequerimientoFormScreen() {
     <ErrorState onRetry={() => id != null && cargarRequerimiento(id)} />
   ) : null;
 
-  const renderAviso = avisoActa ? (
-    <View accessibilityRole="alert" style={styles.notificacionError}>
-      <Text style={styles.notificacionText}>{avisoActa}</Text>
-    </View>
-  ) : null;
-
   return (
     <ErrorBoundary
       fallbackTitle="No se pudo cargar el formulario"
@@ -356,7 +351,6 @@ export default function RequerimientoFormScreen() {
               renderError
             ) : (
               <>
-                {renderAviso}
                 <DateTimePickerField
                   label="Fecha"
                   value={fechaInput}
@@ -563,6 +557,13 @@ export default function RequerimientoFormScreen() {
             )}
           </ScrollView>
         </KeyboardAvoidingView>
+        <MessageDialog
+          visible={avisoActa !== null}
+          title="Error"
+          message={avisoActa ?? ''}
+          tone="error"
+          onClose={() => setAvisoActa(null)}
+        />
       </SafeAreaView>
     </ErrorBoundary>
   );
@@ -640,17 +641,5 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.caption.fontSize,
     color: theme.colors.status.warning,
     marginBottom: theme.spacing[3],
-  },
-  notificacionError: {
-    backgroundColor: theme.colors.status.errorBackground,
-    borderRadius: theme.radius.sm,
-    padding: theme.spacing[3],
-    marginBottom: theme.spacing[3],
-  },
-  notificacionText: {
-    fontFamily: theme.typography.body2.fontFamily,
-    fontSize: theme.typography.body2.fontSize,
-    lineHeight: theme.typography.body2.lineHeight,
-    color: theme.colors.text.primary,
   },
 });

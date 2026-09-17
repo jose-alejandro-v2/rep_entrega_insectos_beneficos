@@ -2,7 +2,7 @@
 
 ## Objetivo único
 
-Dejar `InsectosBeneficios` **100% funcional en modo online** y eliminar del runtime cualquier dependencia offline que pueda provocar el crash de arranque del APK.
+Dejar `InsectosBeneficos` **100% funcional en modo online** y eliminar del runtime cualquier dependencia offline que pueda provocar el crash de arranque del APK.
 
 **No reimplementar offline. No agregar sincronización. No crear fallback SQLite. No cambiar reglas de negocio.**
 
@@ -29,7 +29,7 @@ al utilizar `getDatabase().open()`.
 El síntoma posterior en Android es:
 
 ```text
-Invariant Violation: "InsectosBeneficios" has not been registered
+Invariant Violation: "InsectosBeneficos" has not been registered
 ```
 
 Ese mensaje **no debe considerarse la causa primaria**: normalmente significa que una excepción ocurrió durante la carga del bundle antes de `AppRegistry.registerComponent`.
@@ -242,7 +242,7 @@ El objetivo es cero excepciones fatales durante el arranque.
 ### Arranque
 
 - [ ] Abre sin cerrarse.
-- [ ] No aparece `InsectosBeneficios has not been registered`.
+- [ ] No aparece `InsectosBeneficos has not been registered`.
 - [ ] Server Check funciona.
 - [ ] Se puede configurar/restablecer URL.
 

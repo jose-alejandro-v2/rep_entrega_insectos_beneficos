@@ -48,7 +48,7 @@ mobile/       App React Native CLI 0.86 / React 19.2.3 — auth v2 (login 3 paso
               SecureStore/keychain), módulos Programación (Lunes/Jueves reales + Restante, pull-to-refresh,
               cumplimiento de producción), Requerimientos (multi-select lotes/plagas, evidencia de entrega
               en estado Aprobado), Catálogos (Usuarios con correo electrónico), fotos de requerimiento
-               + hook usePhotoCapture, notificaciones in-app + FCM — versión 1.14.0
+               + hook usePhotoCapture, notificaciones in-app + FCM — versión 1.14.2
 web/          Frontend React + Vite (pendiente de scaffold)
 docs_implementacion/
 ├── _sdd/                      Especificación, plan, tareas e implementación
@@ -159,13 +159,16 @@ docs_implementacion/
   Ampliación del HITO-018 con tres componentes: (1) **SMTP relay interno** — Exchange interno
   `10.13.10.10:25` (sin TLS, sin AUTH, relay abierto). Verificado con curl desde contenedor
   (`250 2.6.0 Queued mail for delivery`). (2) **Firebase Cloud Messaging** — autorizado por
-  ADR-A004. Backend: `FirebasePushService` + `DispositivoToken` (V24). Mobile: `@react-native-firebase/messaging`
-  v26 (modular API), `NotificationService.ts`, `NotificacionesScreen.tsx`. (3) **Notificaciones
-  in-app** — tabla `notificaciones` (V25), entity, repository, resource, DTO. 4 eventos:
-  programación publicada, requerimiento creado, cambio de estado, requerimiento entregado.
+  ADR-A004. Backend: `FirebasePushService` (service account montada como volumen read-only) +
+  `DispositivoToken` (V24). Mobile: `@react-native-firebase/messaging` v26 (modular API),
+  `NotificationService.ts`, `NotificacionesScreen.tsx`. Paquete Android corregido a
+  `com.insectosbeneficos`. (3) **Notificaciones in-app** — tabla `notificaciones` (V25),
+  entity, repository, resource, DTO. 4 eventos: programación publicada, requerimiento creado,
+  cambio de estado, requerimiento entregado. **Permisos obligatorios**: pantalla PermissionsScreen
+  solicita cámara + notificaciones la primera vez. **Canal notificaciones Android**: push estilo
+  WhatsApp. **Popups éxito**: Alert al enviar requerimiento o publicar programación.
   Suite: **102 tests BE (0 fallas) · 145 tests MO**.
-- **Pendientes**: Firebase Console (crear proyecto, descargar `google-services.json` +
-  `firebase-service-account.json`), frontend web (React/Vite) y CI/CD (GitHub Actions).
+- **Pendientes**: frontend web (React/Vite) y CI/CD (GitHub Actions).
   Ver [`docs_implementacion/_sdd/`](docs_implementacion/_sdd/).
 
 ## Base de datos local (desarrollo)

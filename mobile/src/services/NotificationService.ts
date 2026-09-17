@@ -1,13 +1,15 @@
 /**
  * NotificationService — servicio de notificaciones push FCM (ADR-A004).
  *
- * Usa la API modular de @react-native-firebase/messaging v26+.
+ * Usa @react-native-firebase/messaging v26+ (API modular) + @notifee/react-native
+ * para mostrar notificaciones en la barra de notificaciones (estilo WhatsApp).
  *
  * Responsabilidades:
- *  1. Solicitar permisos de notificación al usuario.
+ *  1. Crear canales de notificación Android.
  *  2. Obtener y registrar el token FCM en el backend.
- *  3. Escuchar mensajes en foreground (app abierta).
- *  4. Registrar/eliminar tokens al hacer login/logout.
+ *  3. Escuchar mensajes en foreground → mostrar en la barra (no popup).
+ *  4. Manejar tap en notificación (background/killed) → navegar a pantalla.
+ *  5. Registrar/eliminar tokens al hacer login/logout.
  */
 
 import {
@@ -15,13 +17,23 @@ import {
   getToken,
   onTokenRefresh,
   onMessage,
+  onNotificationOpenedApp,
+  getInitialNotification,
   requestPermission,
   AuthorizationStatus,
   type Messaging,
   type RemoteMessage,
 } from '@react-native-firebase/messaging';
-import {Platform, Alert} from 'react-native';
+import notifee, {
+  AndroidImportance,
+  type Event,
+  EventType,
+} from '@notifee/react-native';
+import {Platform} from 'react-native';
 import {api} from './ApiClient';
+
+const CHANNEL_GENERAL = 'insectos_beneficos_general';
+const CHANNEL_SUCCESS = 'insectos_beneficos_success';
 
 class NotificationServiceClass {
   private initialized = false;
@@ -38,10 +50,13 @@ class NotificationServiceClass {
     }
 
     try {
-      // 1. Obtener instancia de messaging
+      // 1. Crear canales Android (necesario para que las notificaciones aparezcan en la barra)
+      await this.createNotificationChannels();
+
+      // 2. Obtener instancia de messaging
       this.messagingInstance = getMessaging();
 
-      // 2. Solicitar permisos
+      // 3. Solicitar permisos
       const authStatus = await requestPermission(this.messagingInstance, {
         alert: true,
         badge: true,
@@ -57,31 +72,64 @@ class NotificationServiceClass {
         return;
       }
 
-      // 3. Obtener token FCM
+      // 4. Obtener token FCM
       const token = await getToken(this.messagingInstance);
       if (token) {
         this.currentToken = token;
         console.log('[NotificationService] Token FCM obtenido:', token.substring(0, 20) + '...');
 
-        // 4. Registrar en el backend
+        // 5. Registrar en el backend
         await this.registrarTokenEnBackend(token, usuarioId);
       }
 
-      // 5. Listener de token refresh
+      // 6. Listener de token refresh
       onTokenRefresh(this.messagingInstance, async (newToken: string) => {
         console.log('[NotificationService] Token refrescado');
         this.currentToken = newToken;
         await this.registrarTokenEnBackend(newToken, usuarioId);
       });
 
-      // 6. Listener de mensajes en foreground
+      // 7. Listener de mensajes en foreground → mostrar en barra de notificaciones
       this.setupForegroundListener();
+
+      // 8. Listener de tap en notificación (app en background)
+      this.setupNotificationOpenedListener();
+
+      // 9. Verificar si la app se abrió desde una notificación (app estaba cerrada)
+      await this.checkInitialNotification();
 
       this.initialized = true;
       console.log('[NotificationService] Inicializado correctamente');
     } catch (error) {
       console.error('[NotificationService] Error al inicializar:', error);
     }
+  }
+
+  /**
+   * Crea los canales de notificación Android.
+   */
+  private async createNotificationChannels(): Promise<void> {
+    if (Platform.OS !== 'android') {
+      return;
+    }
+
+    await notifee.createChannel({
+      id: CHANNEL_GENERAL,
+      name: 'Notificaciones generales',
+      importance: AndroidImportance.HIGH,
+      vibration: true,
+      sound: 'default',
+    });
+
+    await notifee.createChannel({
+      id: CHANNEL_SUCCESS,
+      name: 'Confirmaciones',
+      importance: AndroidImportance.DEFAULT,
+      vibration: false,
+      sound: 'default',
+    });
+
+    console.log('[NotificationService] Canales de notificación creados');
   }
 
   /**
@@ -103,6 +151,8 @@ class NotificationServiceClass {
 
   /**
    * Configura el listener de mensajes en foreground.
+   * En vez de mostrar un popup (Alert), muestra la notificación en la barra
+   * de notificaciones del sistema (estilo WhatsApp).
    */
   private setupForegroundListener(): void {
     if (!this.messagingInstance) {
@@ -115,9 +165,54 @@ class NotificationServiceClass {
 
       console.log('[NotificationService] Mensaje en foreground:', titulo, mensaje);
 
-      // Mostrar alerta local
-      Alert.alert(titulo, mensaje, [{text: 'OK', style: 'default'}]);
+      // Mostrar notificación en la barra del sistema (no popup)
+      await notifee.displayNotification({
+        title: titulo,
+        body: mensaje,
+        android: {
+          channelId: CHANNEL_GENERAL,
+          pressAction: {id: 'default'},
+        },
+        ios: {
+          sound: 'default',
+        },
+      });
     });
+  }
+
+  /**
+   * Configura el listener de tap en notificaciones (app en background).
+   * Navega a la pantalla correspondiente según el tipo de notificación.
+   */
+  private setupNotificationOpenedListener(): void {
+    // Listener de @notifee para acciones de notificación
+    notifee.onForegroundEvent(async ({type, detail}: Event) => {
+      if (type === EventType.PRESS) {
+        console.log('[NotificationService] Notificación presionada en foreground');
+        // TODO: navegar a pantalla relevante cuando se implemente deep linking
+      }
+    });
+
+    // Listener de Firebase para app en background
+    onNotificationOpenedApp(this.messagingInstance!, remoteMessage => {
+      console.log('[NotificationService] App abierta desde notificación (background)');
+      // TODO: navegar a pantalla relevante cuando se implemente deep linking
+    });
+  }
+
+  /**
+   * Verifica si la app se abrió desde una notificación (app estaba cerrada).
+   */
+  private async checkInitialNotification(): Promise<void> {
+    try {
+      const remoteMessage = await getInitialNotification(this.messagingInstance!);
+      if (remoteMessage) {
+        console.log('[NotificationService] App abierta desde notificación (killed)');
+        // TODO: navegar a pantalla relevante cuando se implemente deep linking
+      }
+    } catch (error) {
+      console.error('[NotificationService] Error al verificar notificación inicial:', error);
+    }
   }
 
   /**

@@ -16,9 +16,9 @@ public class NotificacionRepository implements PanacheRepositoryBase<Notificacio
         return list("usuarioId = ?1 order by fechaCreacion desc", usuarioId);
     }
 
-    /** Marca una notificacion como leida. */
-    public void marcarLeida(Long id) {
-        update("leido = true where id = ?1", id);
+    /** Marca una notificacion como leida (valida ownership). */
+    public void marcarLeidaOwned(Long id, Long usuarioId) {
+        update("leido = true where id = ?1 and usuarioId = ?2", id, usuarioId);
     }
 
     /** Marca todas las notificaciones de un usuario como leidas. */

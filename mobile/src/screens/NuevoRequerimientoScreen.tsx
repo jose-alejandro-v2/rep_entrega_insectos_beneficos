@@ -33,6 +33,7 @@ import ErrorState from '../components/ErrorState';
 import LoadingState from '../components/LoadingState';
 import MultiSelectField from '../components/MultiSelectField';
 import SelectField from '../components/SelectField';
+import MessageDialog from '../components/MessageDialog';
 import {useRequerimientosCatalogos} from '../hooks/useRequerimientosCatalogos';
 import type {RootStackParamList} from '../navigation/types';
 import {
@@ -67,7 +68,10 @@ export default function NuevoRequerimientoScreen() {
   const [observaciones, setObservaciones] = useState('');
 
   const [stock, setStock] = useState<number | null>(null);
-  const [errorEnvio, setErrorEnvio] = useState<string | null>(null);
+  const [notificacion, setNotificacion] = useState<{
+    tipo: 'ok' | 'error';
+    texto: string;
+  } | null>(null);
   const [saving, setSaving] = useState(false);
 
   const cambiarFundo = (value: number | string) => {
@@ -111,7 +115,7 @@ export default function NuevoRequerimientoScreen() {
 
   const enviar = async () => {
     setSaving(true);
-    setErrorEnvio(null);
+    setNotificacion(null);
     try {
       await crearRequerimiento({
         fecha: isoFecha ?? hoyISO(),
@@ -123,9 +127,12 @@ export default function NuevoRequerimientoScreen() {
         plagas: plagasIds,
         observaciones: observaciones.trim() || null,
       });
-      navigation.goBack();
+      setNotificacion({
+        tipo: 'ok',
+        texto: 'Tu requerimiento fue enviado correctamente. El equipo de I+D lo revisara pronto.',
+      });
     } catch (e) {
-      setErrorEnvio(extractErrorMessage(e));
+      setNotificacion({tipo: 'error', texto: extractErrorMessage(e)});
     } finally {
       setSaving(false);
     }
@@ -174,11 +181,6 @@ export default function NuevoRequerimientoScreen() {
               <LoadingState message="Cargando catálogos…" />
             ) : (
               <>
-                {errorEnvio ? (
-                  <View accessibilityRole="alert" style={styles.notificacionError}>
-                    <Text style={styles.notificacionText}>{errorEnvio}</Text>
-                  </View>
-                ) : null}
                 <DateTimePickerField
                   label="Fecha"
                   value={fechaInput}
@@ -279,6 +281,18 @@ export default function NuevoRequerimientoScreen() {
             )}
           </ScrollView>
         </KeyboardAvoidingView>
+        <MessageDialog
+          visible={notificacion !== null}
+          title={notificacion?.tipo === 'error' ? 'Error' : 'Listo'}
+          message={notificacion?.texto ?? ''}
+          tone={notificacion?.tipo === 'error' ? 'error' : 'success'}
+          onClose={() => {
+            setNotificacion(null);
+            if (notificacion?.tipo === 'ok') {
+              setTimeout(() => navigation.goBack(), 100);
+            }
+          }}
+        />
       </SafeAreaView>
     </ErrorBoundary>
   );
@@ -329,17 +343,5 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.caption.fontSize,
     color: theme.colors.status.warning,
     marginBottom: theme.spacing[2],
-  },
-  notificacionError: {
-    backgroundColor: theme.colors.status.errorBackground,
-    borderRadius: theme.radius.sm,
-    padding: theme.spacing[3],
-    marginBottom: theme.spacing[3],
-  },
-  notificacionText: {
-    fontFamily: theme.typography.body2.fontFamily,
-    fontSize: theme.typography.body2.fontSize,
-    lineHeight: theme.typography.body2.lineHeight,
-    color: theme.colors.text.primary,
   },
 });

@@ -26,7 +26,8 @@ public class DispositivoTokenService {
 
     /**
      * Registra un token FCM para un usuario. Si el token ya existe y esta
-     * inactivo, lo reactiva. Si ya esta activo, actualiza la fecha.
+     * inactivo, lo reactiva y reasigna al usuario actual. Si ya esta activo,
+     * actualiza la fecha y el dueño.
      */
     @Transactional
     public DispositivoTokenDto registrar(Long usuarioId, RegistrarTokenRequest req) {
@@ -38,6 +39,7 @@ public class DispositivoTokenService {
             DispositivoToken dt = existente.get();
             dt.activo = true;
             dt.platform = platform;
+            dt.usuarioId = usuarioId;
             dt.fechaActualizacion = Instant.now();
             LOG.infof("Token reactivado: usuarioId=%d, platform=%s", usuarioId, platform);
             return toDto(dt);
@@ -79,6 +81,13 @@ public class DispositivoTokenService {
     /** Retorna todos los tokens activos (para broadcast). */
     public List<String> obtenerTokensActivos() {
         return repository.findAllActivos().stream()
+                .map(dt -> dt.fcmToken)
+                .collect(Collectors.toList());
+    }
+
+    /** Retorna todos los tokens activos EXCEPTO los de un usuario específico (broadcast sin remitente). */
+    public List<String> obtenerTokensActivosExcluding(Long excludeUsuarioId) {
+        return repository.findAllActivosExcluding(excludeUsuarioId).stream()
                 .map(dt -> dt.fcmToken)
                 .collect(Collectors.toList());
     }

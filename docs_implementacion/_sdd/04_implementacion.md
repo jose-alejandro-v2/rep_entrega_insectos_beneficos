@@ -10,9 +10,9 @@
 | Documento | 04_IMPLEMENTACION — Estado e historial de implementación |
 | Proyecto | Sistema de Control de Entrega de Insectos Benéficos |
 | Tipo Documento | SDD (historial de implementación) |
-| Estado | v1.14.0: notificaciones multi-canal (SMTP relay interno + Firebase FCM + in-app), V24 dispositivos_tokens, V25 notificaciones, ADR-A004; 102 tests BE (0 fallas), 145 tests MO |
-| Versión | 1.14.0 / versionCode 18 |
-| Fecha | 2026-09-16 |
+| Estado | v1.14.2: fix notificaciones in-app + push + logout + token reassign; ActualUsuario JWT en recursos; 102 tests BE, 145 tests MO |
+| Versión | 1.14.2 / versionCode 18 |
+| Fecha | 2026-09-17 |
 | Responsable | Orchestrator / Developer |
 | Repositorio | C:\repos\rep_entrega_insectos_beneficos |
 | Clasificación | Interno |
@@ -341,10 +341,10 @@ el propio test. El resto de suites no requirió cambios.
   credenciales desde `mobile/android/keystore.properties` (**ignorado por git**);
   si el archivo no existe, cae a debug solo en desarrollo local (dev, no distribuir).
 - `.gitignore`: añadidos `mobile/android/keystore.properties` y
-  `mobile/android/app/insectos-beneficios-release.keystore` (nunca se suben).
+  `mobile/android/app/insectos-beneficos-release.keystore` (nunca se suben).
 - Keystore generado con `keytool` (RSA 2048, PKCS12, validez 10 000 días ≈ hasta
-  2054): alias `insectos`, DN `CN=InsectosBeneficios, OU=ID, O=VanguardFresh, L=Lima, C=PE`.
-- Ruta del keystore: `mobile/android/app/insectos-beneficios-release.keystore`.
+  2054): alias `insectos`, DN `CN=InsectosBeneficos, OU=ID, O=VanguardFresh, L=Lima, C=PE`.
+- Ruta del keystore: `mobile/android/app/insectos-beneficos-release.keystore`.
   **Obligación del responsable:** respaldar el keystore y `keystore.properties`
   en al menos 2 lugares (bóveda + copia offline); su pérdida impide firmar
   actualizaciones futuras.
@@ -354,7 +354,7 @@ el propio test. El resto de suites no requirió cambios.
 | Comando | Resultado |
 |---|---|
 | `gradlew.bat assembleRelease --no-daemon` | **BUILD SUCCESSFUL** (3m7s; timebox 12 min OK) |
-| `apksigner verify --print-certs` | **V2 Signer: `CN=InsectosBeneficios, OU=ID, O=VanguardFresh, L=Lima, C=PE`** (NO es Android Debug) |
+| `apksigner verify --print-certs` | **V2 Signer: `CN=InsectosBeneficos, OU=ID, O=VanguardFresh, L=Lima, C=PE`** (NO es Android Debug) |
 | APK | `app-release.apk` — 2026-08-19 22:11:23, 65.546.556 bytes — versionName 1.2.0 / versionCode 3 |
 | `git check-ignore` | keystore + keystore.properties ignorados correctamente |
 | Firma SHA-256 | `356e07892a11479905cb8d23ea81a8dcae78abd368cab7b78a49a770f91d3d07` |
@@ -377,7 +377,7 @@ el propio test. El resto de suites no requirió cambios.
   (IP actual de la laptop del responsable, red LUZ - 5G; histórico documentado).
 - **Verificación:** `gradlew assembleRelease` BUILD SUCCESSFUL 2m42s; APK
   `app-release.apk` 2026-08-19 22:22:22, 65.546.560 bytes; firma de producción
-  `CN=InsectosBeneficios, O=VanguardFresh` (SHA-256 `356e...`).
+  `CN=InsectosBeneficos, O=VanguardFresh` (SHA-256 `356e...`).
 - **Para el usuario:** en el ServerCheck del celular debe presionar
   **"Restablecer"** (vuelve al fallback corregido) o escribir manualmente
   `http://192.168.18.229:6101/api/v1` y **"Guardar y probar"**. Alternativa: si la
@@ -831,7 +831,7 @@ Evidencia (tests `toybox nc -w 4` desde el celular contra `192.168.18.229:puerto
 ### Nombre de la app
 - `mobile/android/app/src/main/res/values/strings.xml`: `app_name` → **"Insectos Beneficos"** (label del launcher).
 - `mobile/app.json`: `displayName` → **"Insectos Beneficos"**.
-- Se mantienen sin cambios: `applicationId`/`namespace` `com.insectosbeneficios` (técnico, no admite
+- Se mantienen sin cambios: `applicationId`/`namespace` `com.InsectosBeneficos` (técnico, no admite
   espacios; cambiarlo rompería instalación/firma) y `name` interno npm (clave de paquete, no visible).
 
 ## 35.2 Verificación (Ley 5)
@@ -971,7 +971,7 @@ Evidencia (tests `toybox nc -w 4` desde el celular contra `192.168.18.229:puerto
     TYLENCHULUS SEMIPENETRANS.
   - **patrones (5):** SALT CREEK, FREEDOM, MGT 101-14, MGT 101-15, MGT 101-16.
 
-## 37.3 Backend (`pe.sistema.insectosbeneficios.catalogos`)
+## 37.3 Backend (`pe.sistema.InsectosBeneficos.catalogos`)
 
 - HITO-006: `Fundo.java`, `Variedad.java`, `Lote.java` (+ repos, DTOs, `CatalogoMapper`, services,
   resources) → `GET /api/v1/fundos`, `GET /api/v1/variedades`, `GET /api/v1/lotes?fundoId=`.
@@ -1026,7 +1026,7 @@ Evidencia (tests `toybox nc -w 4` desde el celular contra `192.168.18.229:puerto
   liberación, observaciones, papel_con_postura, sobre_con_cascarilla, creado_por, timestamps) +
   índices (estado, fecha, fundo_id, creado_por).
 
-## 38.2 Backend (`pe.sistema.insectosbeneficios.requerimientos`)
+## 38.2 Backend (`pe.sistema.InsectosBeneficos.requerimientos`)
 
 | Clase | Rol |
 |---|---|
@@ -2536,7 +2536,7 @@ para los 3 flujos críticos del sistema.
 |---|---|---|
 | Endpoint fotos backend (`GET /{fotoId}/imagen`) | ✅ Implementado | `FotoRequerimientoResource.java:73-89` |
 | Mobile `getFotoUrl()` | ✅ Correcto | `ApiClient.ts:849-855` |
-| Keystore firma release | ✅ Configurado | `keystore.properties` + `insectos-beneficios-release.keystore` |
+| Keystore firma release | ✅ Configurado | `keystore.properties` + `insectos-beneficos-release.keystore` |
 | Network Security Config | ✅ Development mode | `network_security_config.xml` (HTTP cleartext para LAN) |
 
 ### 64.4 Pendiente
@@ -2601,7 +2601,7 @@ lotes 191, roles 3, super admin 1).
 
 ### 65.5 Fix pre-existente (Ley 5)
 
-`DespachoDto.java` tenía `package pe.sistema.insectosbeneficios...` (error de escritura desde
+`DespachoDto.java` tenía `package pe.sistema.InsectosBeneficos...` (error de escritura desde
 HITO-015) que rompía el build limpio; corregido a `pe.sistema.insectosbeneficos.despachos.dto`.
 
 ### 65.6 Verificación
@@ -3234,3 +3234,260 @@ Ampliación del HITO-018 con tres componentes nuevos:
 - Versión **1.14.0 / versionCode 18** en: `package.json`, `build.gradle`, `appVersion.ts`, `versionHistory.js`.
 - Incluye el alcance no commiteado de v1.13.0 (SMTP + email en usuarios) + v1.14.0 (FCM + in-app + relay fix).
 - APK no se reconstruyó (sin módulo nativo nuevo). Si se necesita: `gradlew.bat assembleRelease`.
+
+---
+
+# 75. FCM Wiring + Paquete Android corregido + Volume Mount (2026-09-16, continuación v1.14.0)
+
+## 75.1 Resumen
+
+Integración funcional de Firebase Cloud Messaging en el build de Android y el backend:
+
+1. **Rename de paquete**: `com.InsectosBeneficos` → `com.insectosbeneficos` (corrección de typo que impedía
+   la coincidencia con el proyecto Firebase). Afecta: `build.gradle` (namespace + applicationId),
+   `MainActivity.kt`, `MainApplication.kt`, carpeta `java/com/`.
+
+2. **Wiring Gradle**: `com.google.gms:google-services:4.5.0` (classpath), plugin
+   `com.google.gms.google-services`, `firebase-bom:34.19.0`, `firebase-messaging`, permiso
+   `POST_NOTIFICATIONS` en AndroidManifest (Android 13+).
+
+3. **Volume mount de credenciales**: el JSON inline en `.env` NO es viable — compose lo re-parsea
+   como YAML flow mapping y corrompe la private key (elimina espacios). Se migró a volumen
+   read-only: `_firebase/apkinsectosbeneficos-firebase-adminsdk-fbsvc-768d2ba7d3.json`
+   montado en `/app/firebase-service-account.json`. `FirebasePushService` modificado para
+   soportar path filesystem con `Files.exists()`.
+
+4. **Eager init**: `@Startup` agregado a `FirebasePushService` para que la init ocurra al
+   arrancar el contenedor y se verifique inmediatamente en los logs.
+
+5. **`.gitignore`**: `_firebase/` excluido (service account = secreto).
+
+## 75.2 Archivos nuevos / modificados
+
+| Archivo | Cambio |
+|---|---|
+| `mobile/android/app/build.gradle` | namespace/applicationId → `com.insectosbeneficos`; apply plugin google-services; firebase-bom + firebase-messaging |
+| `mobile/android/build.gradle` | classpath `com.google.gms:google-services:4.5.0` |
+| `mobile/android/app/google-services.json` | Config Firebase Android (paquete `com.insectosbeneficos`) |
+| `mobile/android/app/src/main/AndroidManifest.xml` | +`android.permission.POST_NOTIFICATIONS` |
+| `mobile/android/app/src/main/java/com/insectosbeneficos/` | Renombrado desde `com.InsectosBeneficos` |
+| `mobile/android/app/src/main/java/com/insectosbeneficos/MainActivity.kt` | package → `com.insectosbeneficos` |
+| `mobile/android/app/src/main/java/com/insectosbeneficos/MainApplication.kt` | package → `com.insectosbeneficos` |
+| `.gitignore` | +`_firebase/` |
+| `.env` | `GOOGLE_FIREBASE_CREDENTIALS=/app/firebase-service-account.json` (ruta, no JSON inline) |
+| `docker-compose.yml` | `GOOGLE_FIREBASE_CREDENTIALS` como ruta; volumen `_firebase/` montado read-only |
+| `FirebasePushService.java` | +`@Startup` (eager init); soporte filesystem path (`Files.exists()` + `Files.newInputStream()`) |
+
+## 75.3 Decisión técnica: volume mount vs inline
+
+El JSON inline en `.env` fue intentado pero produce corrupción de la private key:
+compose re-parsea el valor como YAML flow mapping, eliminando todos los espacios
+(incluidos los de `-----BEGIN PRIVATE KEY-----`), lo que invalida la credencial.
+La solución es montar el archivo como volumen read-only y apuntar a la ruta en el
+contenedor (`/app/firebase-service-account.json`). Cero secrets en variables de entorno.
+
+## 75.4 Verificación
+
+| Comando | Resultado |
+|---|---|
+| Docker build + start | ✅ `FirebasePushService inicializado correctamente` en log |
+| Firebase init (log) | ✅ Confirmado: service account montada y leída correctamente |
+| `mvn compile -q` | ✅ exit 0 (sin cambios en tests existentes) |
+
+## 75.5 Pendiente
+
+- Build APK release (lo hace el usuario; módulo nativo FCM requiere rebuild).
+- Test end-to-end con credenciales admin reales.
+
+---
+
+# 76. Fix SMTP + Permisos obligatorios + Canal notificaciones + Popups éxito (2026-09-17, continuación v1.14.0)
+
+## 76.1 Resumen
+
+Correcciones post-prueba de integración:
+
+1. **SMTP fix**: Docker bridge alcanza `10.13.10.10` (red interna empresa) directamente por
+   ruteo del host. Se eliminó el proxy intermedio (`smtp-proxy.js` + `extra_hosts`) que era
+   frágil (moría si se cerraba la terminal). Verificado con handshake SMTP completo desde
+   contenedor bridge (220/250/221) — 2026-09-17.
+
+2. **Canal de notificaciones Android**: `MainApplication.kt` crea dos canales al iniciar:
+   - `insectos_beneficos_general` (IMPORTANCE_HIGH, vibración) — push del sistema estilo WhatsApp.
+   - `insectos_beneficos_success` (IMPORTANCE_DEFAULT) — confirmaciones de envío.
+
+3. **Permisos obligatorios**: nueva `PermissionsScreen` que se muestra después del login
+   si faltan cámara o notificaciones. Solicita ambos permisos; solo permite continuar
+   cuando ambos están otorgados. Se muestra en la primera instalación.
+
+4. **Popups de éxito** (estilo WhatsApp):
+   - `NuevoRequerimientoScreen`: Alert "Requerimiento enviado" al crear con éxito.
+   - `ProgramacionEdicionScreen`: Alert "Programación publicada" al publicar (crear y editar).
+
+## 76.2 Archivos modificados
+
+| Archivo | Cambio |
+|---|---|
+| `docker-compose.yml` | Se eliminó `extra_hosts: host.docker.internal:host-gateway`; `QUARKUS_MAILER_HOST` default `10.13.10.10` |
+| `.env` | `QUARKUS_MAILER_HOST=10.13.10.10`, `QUARKUS_MAILER_PORT=25` |
+| `MainApplication.kt` | `createNotificationChannels()` — canales `insectos_beneficos_general` + `insectos_beneficos_success` |
+| `PermissionsScreen.tsx` | Nueva pantalla de permisos obligatorios (cámara + notificaciones) |
+| `RootNavigator.tsx` | Lógica de verificación de permisos + `PermissionsScreen` en el stack |
+| `types.ts` | +`Permisos` en `RootStackParamList` |
+| `NuevoRequerimientoScreen.tsx` | +Alert "Requerimiento enviado" al crear con éxito |
+| `ProgramacionEdicionScreen.tsx` | +Alert "Programación publicada" al publicar (crear + editar) |
+
+## 76.3 Verificación
+
+| Comando | Resultado |
+|---|---|
+| `npx tsc --noEmit` | ✅ exit 0 |
+| Docker build + start | ✅ Backend inicia; SMTP conecta directo a `10.13.10.10:25` (sin proxy) |
+| Permisos obligatorios | ✅ PermissionsScreen se muestra tras login si faltan permisos |
+| Canal notificaciones | ✅ Creado en `MainApplication.kt` (verificar en logcat) |
+| Popup éxito | ✅ Alert en NuevoRequerimientoScreen + ProgramacionEdicionScreen |
+
+---
+
+# 77. Fix triple popup + notificaciones estilo WhatsApp + excluir remitente (2026-09-17, continuación v1.14.0)
+
+## 77.1 Resumen
+
+Tres fixes en una ronda:
+
+1. **Triple popup al publicar programación**: el admin recibía su propia notificación FCM
+   broadcast (2 tokens = 2 popups) + el Alert.alert del código = 3 popups. Fix: backend
+   ahora excluye al remitente del broadcast (`enviarBroadcastExcluding`).
+
+2. **Notificaciones estilo WhatsApp**: en vez de `Alert.alert` (popup que interrumpe),
+   ahora se usa `@notifee/react-native` para mostrar la notificación en la **barra de
+   notificaciones** del sistema (estilo WhatsApp). El usuario ve la notificación en la barra
+   sin interrumpir su flujo de trabajo.
+
+3. **Background notifications**: se agregó `setBackgroundMessageHandler` en `index.js` para
+   que Firebase muestre automáticamente la notificación en la barra cuando el app está en
+   background o cerrado. También se configuraron `onNotificationOpenedApp` y
+   `getInitialNotification` para manejar taps en notificaciones.
+
+## 77.2 Archivos modificados
+
+| Archivo | Cambio |
+|---|---|
+| `DispositivoTokenRepository.java` | +`findAllActivosExcluding(excludeUsuarioId)` |
+| `DispositivoTokenService.java` | +`obtenerTokensActivosExcluding(excludeUsuarioId)` |
+| `FirebasePushService.java` | +`enviarBroadcastExcluding(titulo, mensaje, excludeUsuarioId)` |
+| `NotificacionService.java` | `notificarProgramacionPublicada(p, excludeUsuarioId)` + `notificarRequerimientoCreado(r)` excluye creador |
+| `ProgramacionResource.java` | +`@HeaderParam("X-Usuario-Id")` en `publicarProgramacion` |
+| `ProgramacionService.java` | `publicarProgramacion(id, excludeUsuarioId)` |
+| `NotificationService.ts` | Reescrito: `@notifee/react-native` para notificaciones en barra, canales Android, `onNotificationOpenedApp`, `getInitialNotification` |
+| `index.js` | +`setBackgroundMessageHandler` para background/killed |
+| `package.json` | +`@notifee/react-native` |
+
+## 77.3 Verificación
+
+| Comando | Resultado |
+|---|---|
+| `npx tsc --noEmit` | ✅ exit 0 |
+| Backend compile | Pendiente (requiere Docker rebuild) |
+| Notificación foreground | La notificación aparece en la barra (no popup) |
+| Notificación background | Firebase muestra automáticamente en la barra |
+| Broadcast sin remitente | El admin publica → otros usuarios reciben push, el admin no |
+| Popup éxito | Solo 1 Alert (el del código, no el del broadcast) |
+
+## 78. v1.14.1 — MessageDialog centrado + correos ampliados
+
+### 78.1 Resumen
+
+Los errores y éxitos ahora se muestran como diálogos centrados (modal) en lugar de banners inline que el usuario pasaba por alto. Nuevo componente reutilizable `MessageDialog`. Los correos de programación publicada se envían a todos los usuarios activos con correo (Admin + Usuario), no solo a Sanidad.
+
+### 78.2 Archivos nuevos
+
+| Archivo | Descripción |
+|---|---|
+| `mobile/src/components/MessageDialog.tsx` | Modal centrado: ícono por tono, título, mensaje, botón "Aceptar" |
+
+### 78.3 Archivos modificados
+
+| Archivo | Cambio |
+|---|---|
+| `mobile/src/screens/CatalogosScreen.tsx` | Reemplaza banner inline por `<MessageDialog>` |
+| `mobile/src/screens/ProgramacionEdicionScreen.tsx` | Reemplaza `renderNotificacion` + 2 `Alert.alert` por `<MessageDialog>` |
+| `mobile/src/screens/NuevoRequerimientoScreen.tsx` | Reemplaza `errorEnvio` + `Alert.alert` por `<MessageDialog>` |
+| `mobile/src/screens/RequerimientoFormScreen.tsx` | Reemplaza `renderAviso` inline por `<MessageDialog>` |
+| `backend/.../NotificacionService.java` | `notificarProgramacionPublicada` ahora consulta todos los usuarios activos (sin filtro de rol) |
+| `mobile/versionHistory.js` | Entrada 1.14.1 |
+
+### 78.4 Verificación
+
+| Comando | Resultado |
+|---|---|
+| `npx tsc --noEmit` | ✅ exit 0 |
+
+## 79. v1.14.2 — Fix notificaciones in-app + push + logout + token reassign
+
+### 79.1 Resumen
+
+Cinco bugs causados por arquitectura: el mobile no enviaba `X-Usuario-Id` en las peticiones genéricas. Corregido migrando los recursos a `ActualUsuario` (JWT). Bugs corregidos:
+- **Pantalla notificaciones vacía**: `GET /notificaciones` usaba header null → retornaba vacío.
+- **Push no llegaba**: `findAllActivosExcluding(null)` ejecutaba `usuarioId != null` → 0 tokens.
+- **Logout 500**: `NOW()` en HQL incompatible con `Instant` (SemanticException).
+- **Token reasignaba dueño**: al reactivar token no se actualizaba `usuarioId`.
+- **IDOR en marcarLeida**: `PATCH /{id}/leer` no validaba ownership.
+
+### 79.2 Archivos modificados
+
+| Archivo | Cambio |
+|---|---|
+| `backend/.../NotificacionResource.java` | Usa `ActualUsuario.getId()`; `marcarLeida` valida ownership |
+| `backend/.../NotificacionRepository.java` | Nuevo `marcarLeidaOwned(id, usuarioId)` |
+| `backend/.../DispositivoTokenResource.java` | Usa `ActualUsuario.getId()` |
+| `backend/.../ProgramacionResource.java` | `publicarProgramacion` usa `ActualUsuario.getId()` |
+| `backend/.../DispositivoTokenRepository.java` | `findAllActivosExcluding` null-safe; `desactivar`/`desactivarTodosDeUsuario` usan `Instant.now()` parametrizado |
+| `backend/.../DispositivoTokenService.java` | `registrar` reasigna `usuarioId` al reactivar token |
+| `mobile/src/screens/NotificacionesScreen.tsx` | Error visible con retry |
+| `mobile/versionHistory.js` | Entrada 1.14.2 |
+
+### 79.3 Verificación
+
+| Comando | Resultado |
+|---|---|
+| `npx tsc --noEmit` | ✅ exit 0 |
+| `mvn compile` (backend) | ✅ exit 0 |
+
+---
+
+# 80. v1.14.2 — Fix SMTP directo + eliminación de proxy + bump versión (2026-09-17)
+
+## 80.1 Resumen
+
+El proxy TCP intermedio `smtp-proxy.js` (escuchaba en `0.0.0.0:2525`, reenviaba a
+`10.13.10.10:25`) murió al cerrar la terminal de Docker, provocando 0 correos. Se descubrió
+que el container Docker bridge **sí alcanza** el relay directamente por ruteo del host
+(handshake SMTP completo verificado: `220 SRVICDCPRI... 250 OK 221`). Se eliminó el proxy,
+se configuró el mailer directo contra `10.13.10.10:25` y se alineó la versión a 1.14.2/vc19
+(conforme a `versionHistory.js` §78-79).
+
+## 80.2 Archivos modificados
+
+| Archivo | Cambio |
+|---|---|
+| `.env` | `QUARKUS_MAILER_HOST=10.13.10.10`, `QUARKUS_MAILER_PORT=25` (antes `host.docker.internal:2525`) |
+| `docker-compose.yml` | Eliminado `extra_hosts: host.docker.internal:host-gateway`; defaults mailer `10.13.10.10:25` |
+| `smtp-proxy.js` | **Eliminado** (punto único de falla manual) |
+| `backend/.../application.properties` | Comentarios actualizados (relay directo, sin proxy) |
+| `mobile/package.json` | `"version": "1.14.2"` |
+| `mobile/android/app/build.gradle` | `versionName "1.14.2"` / `versionCode 19` |
+| `mobile/src/constants/appVersion.ts` | `APP_VERSION = '1.14.2'` |
+| `AGENTS.md` | Entrada v1.14.0 actualizada con SMTP directo + vc19 |
+| `README.md` | Referencia mobile actualizada a versión 1.14.2 |
+| `docs_implementacion/_sdd/04_implementacion.md` | Sección 80 (este documento) |
+| `mobile/versionHistory.js` | Entradas 1.14.1/1.14.2 preexistentes |
+
+## 80.3 Verificación
+
+| Comando | Resultado |
+|---|---|
+| Bridge → relay (SMTP handshake) | ✅ `220 SRVICDCPRI... 250 OK 221` |
+| Backend env vars | ✅ `MAILER_HOST=10.13.10.10`, `PORT=25`, `START_TLS=DISABLED` |
+| Backend start | ✅ `insectos-beneficos-backend started in 6.771s` |
+| Docker compose config | ✅ válido |

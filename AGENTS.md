@@ -38,8 +38,8 @@ convenciones de documentación y coordinación de agentes.
 | Capa | Tecnología |
 |---|---|
 | Autenticación | **JWT local** (tabla `usuarios` + super admin). Descartados: Microsoft Entra ID / OAuth / OIDC / Firebase |
-| Backend | Quarkus (Java), PostgreSQL + Flyway, iText PDF, envío de correos SMTP (relay interno `10.13.10.10:25`) |
-| Mobile | React Native CLI + Gradle (NO Expo/EAS), React Navigation, react-native-paper (MD3), React Hook Form + Zod |
+| Backend | Quarkus (Java), PostgreSQL + Flyway (V1-V25), iText PDF, SMTP relay interno (`10.13.10.10:25`), Firebase Admin SDK (service account via volumen Docker) |
+| Mobile | React Native CLI + Gradle (NO Expo/EAS), React Navigation, react-native-paper (MD3), React Hook Form + Zod, `@react-native-firebase/app` + `@react-native-firebase/messaging` |
 | Web | React 18 + Vite + MUI |
 | Infra | Docker / Docker Compose, Nginx, GitHub Actions, VPS Linux |
 | Almacenamiento evidencias | Filesystem server + metadatos inmutables (sin Firebase) |
@@ -105,6 +105,9 @@ NotificacionesScreen, 145 tests).
 El backend corre dockerizado (compose proyecto `repo_registro_insectos_beneficos`): postgres:16 +
 imagen `repo_registro_insectos_beneficos-backend` (puerto 6101) + nginx (proxy 8080 → 6101),
 zona horaria `America/Lima` en el contenedor (HITO-016).
+La service account de Firebase se monta como volumen read-only en el contenedor backend
+(`_firebase/apkinsectosbeneficos-firebase-adminsdk-fbsvc-768d2ba7d3.json` → `/app/firebase-service-account.json`).
+El paquete Android es `com.insectosbeneficos` (corregido desde `com.insectosbeneficos`).
 
 ## 4. No usar (prohibido por decisión vigente)
 
@@ -273,8 +276,17 @@ y reportar al Orchestrator; no "arreglarlo" en silencio.
   in-app** — tabla `notificaciones` (V25), entity, repository, resource, DTO. `NotificacionService`
   persiste notificación por usuario en cada evento (además de email + push). 4 eventos:
   programación publicada (broadcast), requerimiento creado (broadcast), cambio de estado
-  (dirigido), requerimiento entregado (dirigido + email). Versión **1.14.0** / versionCode 18.
-  Mobile: 145 tests · Backend: 102 tests (0 fallas).
+  (dirigido), requerimiento entregado (dirigido + email). **FCM Wiring**: paquete Android
+  corregido a `com.insectosbeneficos` (antes `com.insectosbeneficios`), plugin google-services
+  4.5.0, firebase-bom 34.19.0, service account montada como volumen read-only (JSON inline en
+  `.env` descartado por corrupción de compose). `@Startup` para init eager. **Permisos
+  obligatorios**: pantalla `PermissionsScreen` solicita cámara + notificaciones la primera
+  vez. **Canal notificaciones Android**: `insectos_beneficos_general` (IMPORTANCE_HIGH) +
+  `insectos_beneficos_success` (IMPORTANCE_DEFAULT) en `MainApplication.kt`. **SMTP fix**:
+  bridge Docker alcanza relay interno `10.13.10.10:25` directamente (sin proxy intermediario;
+  proxy smtp-proxy.js eliminado). **Popups éxito**: Alert en `NuevoRequerimientoScreen` y
+  `ProgramacionEdicionScreen`.
+  Versión **1.14.2** / versionCode 19. Mobile: 145 tests · Backend: 102 tests (0 fallas).
 - Los hitos se cierran con **auditoría integral PASS + verificación + `05_hito_NNN.md` + commit** coherente.
 - `versionHistory.js` es la fuente del historial visible al usuario (mobile existente); web la adoptará.
 

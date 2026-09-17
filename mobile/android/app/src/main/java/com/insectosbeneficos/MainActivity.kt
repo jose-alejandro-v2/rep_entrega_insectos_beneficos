@@ -1,4 +1,4 @@
-package com.insectosbeneficios
+package com.insectosbeneficos
 
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate

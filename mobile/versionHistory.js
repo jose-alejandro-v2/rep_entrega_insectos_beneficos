@@ -6,6 +6,27 @@
 
 const versionHistory = [
   {
+    version: '1.14.2',
+    fecha: '2026-09-17',
+    cambios: [
+      'Fix: pantalla de notificaciones ahora muestra las notificaciones del usuario (antes salía vacía por falta de JWT en backend).',
+      'Fix: push a la barra de notificaciones ahora funciona (antes no llegaba por consulta null-unsafe en exclusión de remitente).',
+      'Fix: logout ya no falla con error 500 (SemanticException en Hibernate por NOW() incompatible con Instant).',
+      'Fix: token FCM reasigna usuario al reactivar (antes mantenía el dueño original).',
+      'Backend: recursos de notificaciones y tokens ahora usan JWT (ActualUsuario) en vez de header custom.',
+      'Pantalla de notificaciones: error visible con opción de reintentar.',
+    ],
+  },
+  {
+    version: '1.14.1',
+    fecha: '2026-09-17',
+    cambios: [
+      'UX: los errores y éxitos ahora se muestran como diálogos centrados (modal) en lugar de banners inline que pasaban desapercibidos.',
+      'Nuevo componente MessageDialog: modal centrado con ícono, título, mensaje y botón "Aceptar".',
+      'Correos de programación publicada: ahora se envían a todos los usuarios activos con correo (Admin + Usuario), no solo a Sanidad.',
+    ],
+  },
+  {
     version: '1.14.0',
     fecha: '2026-09-16',
     cambios: [
@@ -14,6 +35,14 @@ const versionHistory = [
       'Centro de notificaciones in-app: nueva pantalla "Notificaciones" accesible desde Home para todos los perfiles.',
       'Los correos ahora se envían desde el relay interno de la empresa (puerto 25, sin autenticación).',
       '4 eventos de notificación: programación publicada, requerimiento creado, cambio de estado, requerimiento entregado.',
+      'Firebase Android configurado: paquete corregido a com.insectosbeneficos, plugin google-services integrado.',
+      'Permisos obligatorios: pantalla de permisos (cámara + notificaciones) la primera vez que se instala la app.',
+      'Canal de notificaciones Android: push estilo WhatsApp con sonido y vibración.',
+      'Popup de éxito: al enviar un requerimiento o publicar una programación, el usuario ve un mensaje de confirmación.',
+      'Fix SMTP: Docker bridge alcanza relay interno directamente (smtp-proxy.js eliminado).',
+      'Fix broadcast push: el remitente ya no recibe su propia notificación push.',
+      'Notificaciones estilo WhatsApp: en la barra de notificaciones (no popup) con @notifee/react-native.',
+      'Background notifications: setBackgroundMessageHandler en index.js para mensajes cuando el app está en background.',
     ],
   },
   {

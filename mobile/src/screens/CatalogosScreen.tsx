@@ -17,6 +17,7 @@ import AppHeader from '../components/AppHeader';
 import AppInput from '../components/AppInput';
 import BottomNavigation from '../components/BottomNavigation';
 import ConfirmDialog from '../components/ConfirmDialog';
+import MessageDialog from '../components/MessageDialog';
 import EmptyState from '../components/EmptyState';
 import ErrorBoundary from '../components/ErrorBoundary';
 import ErrorState from '../components/ErrorState';
@@ -601,32 +602,6 @@ export default function CatalogosScreen() {
             styles.content,
             {paddingBottom: 32 + insets.bottom + 68},
           ]}>
-          {notificacion ? (
-            <View
-              accessibilityRole="alert"
-              style={[
-                styles.notification,
-                notificacion.tipo === 'error' &&
-                  styles.notificationError,
-              ]}>
-              <MaterialCommunityIcons
-                name={
-                  notificacion.tipo === 'error'
-                    ? 'alert-circle-outline'
-                    : 'check-circle-outline'
-                }
-                size={20}
-                color={
-                  notificacion.tipo === 'error'
-                    ? theme.colors.status.error
-                    : theme.colors.status.success
-                }
-              />
-              <Text style={styles.notificationText}>
-                {notificacion.texto}
-              </Text>
-            </View>
-          ) : null}
           {tab === 'Usuarios' && puedeGestionar
             ? renderUsuariosTab()
             : renderPerfilesTab()}
@@ -661,6 +636,13 @@ export default function CatalogosScreen() {
           }
           onCancel={() => setConfirm(null)}
           onConfirm={ejecutarConfirm}
+        />
+        <MessageDialog
+          visible={notificacion !== null}
+          title={notificacion?.tipo === 'error' ? 'Error' : 'Listo'}
+          message={notificacion?.texto ?? ''}
+          tone={notificacion?.tipo === 'error' ? 'error' : 'success'}
+          onClose={() => setNotificacion(null)}
         />
       </SafeAreaView>
     </ErrorBoundary>
@@ -708,28 +690,6 @@ const styles = StyleSheet.create({
   },
   tabContent: {
     gap: theme.spacing[4],
-  },
-  notification: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing[2],
-    fontFamily: theme.typography.body2.fontFamily,
-    fontSize: theme.typography.body2.fontSize,
-    lineHeight: theme.typography.body2.lineHeight,
-    color: theme.colors.status.success,
-    backgroundColor: theme.colors.status.successBackground,
-    borderRadius: theme.radius.sm,
-    padding: theme.spacing[3],
-  },
-  notificationError: {
-    backgroundColor: theme.colors.status.errorBackground,
-  },
-  notificationText: {
-    flex: 1,
-    fontFamily: theme.typography.body2.fontFamily,
-    fontSize: theme.typography.body2.fontSize,
-    lineHeight: theme.typography.body2.lineHeight,
-    color: theme.colors.text.primary,
   },
   filters: {
     gap: theme.spacing[3],

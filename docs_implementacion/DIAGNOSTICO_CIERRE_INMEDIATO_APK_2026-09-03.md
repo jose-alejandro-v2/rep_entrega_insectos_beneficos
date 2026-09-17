@@ -10,12 +10,12 @@
 El APK instalado se cierra inmediatamente por una excepción JavaScript fatal durante el arranque de React Native. La evidencia de `adb logcat` muestra:
 
 ```text
-Invariant Violation: "InsectosBeneficios" has not been registered.
+Invariant Violation: "InsectosBeneficos" has not been registered.
 ...
 * A module failed to load due to an error and
   AppRegistry.registerComponent(...) wasn't called.
 FATAL EXCEPTION: mqt_v_native
-Process: com.insectosbeneficios
+Process: com.InsectosBeneficos
 ```
 
 Este mensaje es el efecto final: un módulo importado por `index.js`/`App.tsx` falla antes de ejecutar el registro del componente. No es un error de backend, red, permisos de cámara, firma ni falta de `libop-sqlite.so`; el propio log confirma que `libop-sqlite.so` carga correctamente.
@@ -26,7 +26,7 @@ La causa raíz inmediata confirmada es, por tanto, **fallo de carga del bundle J
 
 ### Dispositivo y APK
 
-- Paquete: `com.insectosbeneficios`
+- Paquete: `com.InsectosBeneficos`
 - `versionName=1.8.0`, `versionCode=11`.
 - APK instalado: `mobile/android/app/build/outputs/apk/release/app-release.apk`.
 - El APK instalado reporta `lastUpdateTime=2026-09-03 16:08:23`.
@@ -38,8 +38,8 @@ La causa raíz inmediata confirmada es, por tanto, **fallo de carga del bundle J
 Comando ejecutado:
 
 ```text
-adb -s 85ijey5tdax8ob5p shell am force-stop com.insectosbeneficios
-adb -s 85ijey5tdax8ob5p shell monkey -p com.insectosbeneficios 1
+adb -s 85ijey5tdax8ob5p shell am force-stop com.InsectosBeneficos
+adb -s 85ijey5tdax8ob5p shell monkey -p com.InsectosBeneficos 1
 adb -s 85ijey5tdax8ob5p logcat -d -v threadtime
 ```
 
@@ -48,7 +48,7 @@ Fragmentos relevantes:
 - `mobile/src/db/sync/SyncManager.ts:60`: el arranque exporta `startSyncListener()`.
 - `mobile/App.tsx:10-12`: `startSyncListener()` se invoca inmediatamente en `useEffect`.
 - `mobile/index.js:5-9`: el registro depende de que todos los imports previos carguen sin excepción.
-- Log: `ReactNativeJS: "InsectosBeneficios" has not been registered`.
+- Log: `ReactNativeJS: "InsectosBeneficos" has not been registered`.
 - Log: `AndroidRuntime: FATAL EXCEPTION: mqt_v_native`.
 - Log: `nativeloader: ... libop-sqlite.so ... ok`.
 

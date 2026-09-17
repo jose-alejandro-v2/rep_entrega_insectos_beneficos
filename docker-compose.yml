@@ -36,10 +36,9 @@ services:
       QUARKUS_DATASOURCE_JDBC_URL: jdbc:postgresql://postgres:5432/insectos_beneficos
       QUARKUS_DATASOURCE_USERNAME: insectos_dev
       QUARKUS_DATASOURCE_PASSWORD: insectos_dev_password_2026
-      # Mailer SMTP (HITO-018): valores desde .env raíz (NUNCA credenciales en git).
-      # Relay interno Exchange (SRVICDCPRI.vanguardfresh.pe) — validado 2026-09-16:
-      # IP 10.13.10.10, puerto 25, SIN TLS y SIN AUTH (relay abierto en red interna;
-      # el servidor NO ofrece AUTH en EHLO → username/password vacíos).
+      # Mailer SMTP (HITO-018): relay interno Exchange (SRVICDCPRI.vanguardfresh.pe).
+      # El container Docker bridge alcanza 10.13.10.10:25 directamente por
+      # ruteo del host — no requiere proxy intermediario ni extra_hosts.
       QUARKUS_MAILER_HOST: ${QUARKUS_MAILER_HOST:-10.13.10.10}
       QUARKUS_MAILER_PORT: ${QUARKUS_MAILER_PORT:-25}
       QUARKUS_MAILER_START_TLS: ${QUARKUS_MAILER_START_TLS:-DISABLED}
@@ -47,12 +46,13 @@ services:
       QUARKUS_MAILER_PASSWORD: ${QUARKUS_MAILER_PASSWORD:-}
       QUARKUS_MAILER_FROM: ${QUARKUS_MAILER_FROM:-notificaciones.noreply@vanguardfresh.com}
       # Firebase FCM (ADR-A004: notificaciones push).
-      # Contenido JSON del service account o path al archivo.
-      GOOGLE_FIREBASE_CREDENTIALS: ${GOOGLE_FIREBASE_CREDENTIALS:-}
+      GOOGLE_FIREBASE_CREDENTIALS: ${GOOGLE_FIREBASE_CREDENTIALS:-/app/firebase-service-account.json}
     ports:
       - "6101:6101"
     volumes:
       - uploads_data:/app/uploads
+      # Service account Firebase (NUNCA se versiona: _firebase/ está en .gitignore).
+      - ./_firebase/apkinsectosbeneficos-firebase-adminsdk-fbsvc-768d2ba7d3.json:/app/firebase-service-account.json:ro
 
   nginx:
     image: nginx:1.27-alpine

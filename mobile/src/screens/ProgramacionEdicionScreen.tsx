@@ -42,6 +42,7 @@ import ErrorBoundary from '../components/ErrorBoundary';
 import ErrorState from '../components/ErrorState';
 import LoadingState from '../components/LoadingState';
 import StatusChip from '../components/StatusChip';
+import MessageDialog from '../components/MessageDialog';
 import type {RootStackParamList} from '../navigation/types';
 import {
   actualizarProgramacion,
@@ -389,11 +390,8 @@ export default function ProgramacionEdicionScreen() {
       const res = await publicarProgramacion(programacion.id);
       setNotificacion({
         tipo: 'ok',
-        texto:
-          res.mensaje ||
-          'Programación publicada. Se notificó a Sanidad por correo.',
+        texto: res.mensaje || 'La programacion fue publicada correctamente. Se notifico a Sanidad.',
       });
-      await cargarDetalle(programacion.id);
     } catch (e) {
       setNotificacion({tipo: 'error', texto: extractErrorMessage(e)});
     } finally {
@@ -429,12 +427,8 @@ export default function ProgramacionEdicionScreen() {
       const res = await publicarProgramacion(nueva.id);
       setNotificacion({
         tipo: 'ok',
-        texto: res.mensaje || 'Programación publicada. Se notificó a Sanidad por correo.',
+        texto: res.mensaje || 'La programacion fue creada y publicada correctamente. Se notifico a Sanidad.',
       });
-      // 4. Navegar al listado después de 1.5s
-      setTimeout(() => {
-        navigation.goBack();
-      }, 1500);
     } catch (e) {
       setNotificacion({tipo: 'error', texto: extractErrorMessage(e)});
     } finally {
@@ -481,17 +475,6 @@ export default function ProgramacionEdicionScreen() {
       </View>
     </View>
   );
-
-  const renderNotificacion = notificacion ? (
-    <View
-      accessibilityRole="alert"
-      style={[
-        styles.notification,
-        notificacion.tipo === 'error' && styles.notificationError,
-      ]}>
-      <Text style={styles.notificationText}>{notificacion.texto}</Text>
-    </View>
-  ) : null;
 
   const renderTabla = () => {
     const chipEstado = (estado: ProgramacionDto['estado']) =>
@@ -608,7 +591,6 @@ export default function ProgramacionEdicionScreen() {
             {paddingBottom: 32 + insets.bottom},
           ]}>
           {renderPeriodo}
-          {renderNotificacion}
           {modo === 'crear' ? (
             // MODO CREAR: selector de especie + tabla (visible desde el montaje) + "Enviar stock"
             <>
@@ -776,6 +758,18 @@ export default function ProgramacionEdicionScreen() {
             </View>
           </View>
         </Modal>
+        <MessageDialog
+          visible={notificacion !== null}
+          title={notificacion?.tipo === 'error' ? 'Error' : 'Listo'}
+          message={notificacion?.texto ?? ''}
+          tone={notificacion?.tipo === 'error' ? 'error' : 'success'}
+          onClose={() => {
+            setNotificacion(null);
+            if (notificacion?.tipo === 'ok') {
+              setTimeout(() => navigation.goBack(), 100);
+            }
+          }}
+        />
       </SafeAreaView>
     </ErrorBoundary>
   );
@@ -840,20 +834,6 @@ const styles = StyleSheet.create({
   },
   pillTextActive: {
     color: theme.colors.text.inverse,
-  },
-  notification: {
-    backgroundColor: theme.colors.status.successBackground,
-    borderRadius: theme.radius.sm,
-    padding: theme.spacing[3],
-  },
-  notificationError: {
-    backgroundColor: theme.colors.status.errorBackground,
-  },
-  notificationText: {
-    fontFamily: theme.typography.body2.fontFamily,
-    fontSize: theme.typography.body2.fontSize,
-    lineHeight: theme.typography.body2.lineHeight,
-    color: theme.colors.text.primary,
   },
   avisoEdicion: {
     fontFamily: theme.typography.caption.fontFamily,

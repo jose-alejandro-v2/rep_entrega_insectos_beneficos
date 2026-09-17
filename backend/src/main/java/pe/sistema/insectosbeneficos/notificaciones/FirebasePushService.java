@@ -22,7 +22,7 @@ import jakarta.inject.Inject;
 
 import org.jboss.logging.Logger;
 
-import io.smallrye.config.SmallRyeConfigProviderResolver;
+import io.quarkus.runtime.Startup;
 
 /**
  * Servicio de notificaciones push via Firebase Cloud Messaging (ADR-A004).
@@ -36,6 +36,7 @@ import io.smallrye.config.SmallRyeConfigProviderResolver;
  * - En tests (%test profile): no se inicializa Firebase (se usa mock).
  * - En dev sin env var: se deshabilita silenciosamente (sin push).
  */
+@Startup
 @ApplicationScoped
 public class FirebasePushService {
 
@@ -68,8 +69,17 @@ public class FirebasePushService {
                 credentials = GoogleCredentials.fromStream(
                         new ByteArrayInputStream(creds.getBytes(StandardCharsets.UTF_8)));
             } else {
-                credentials = GoogleCredentials.fromStream(
-                        getClass().getResourceAsStream(creds));
+                // Ruta a un archivo en el filesystem (volumen Docker) o, si no
+                // existe, un recurso en el classpath.
+                java.nio.file.Path path = java.nio.file.Paths.get(creds);
+                java.io.InputStream in = java.nio.file.Files.exists(path)
+                        ? java.nio.file.Files.newInputStream(path)
+                        : getClass().getResourceAsStream(creds);
+                if (in == null) {
+                    LOG.errorf("GOOGLE_FIREBASE_CREDENTIALS apunta a recurso inexistente: %s", creds);
+                    return;
+                }
+                credentials = GoogleCredentials.fromStream(in);
             }
 
             FirebaseOptions options = FirebaseOptions.builder()
@@ -148,6 +158,15 @@ public class FirebasePushService {
      */
     public int enviarBroadcast(String titulo, String mensaje) {
         List<String> tokens = dispositivoTokenService.obtenerTokensActivos();
+        return enviar(titulo, mensaje, tokens);
+    }
+
+    /**
+     * Convenience: envía a todos los tokens activos EXCEPTO los de un usuario específico.
+     * Útil para broadcast donde el remitente no debe recibir su propia notificación.
+     */
+    public int enviarBroadcastExcluding(String titulo, String mensaje, Long excludeUsuarioId) {
+        List<String> tokens = dispositivoTokenService.obtenerTokensActivosExcluding(excludeUsuarioId);
         return enviar(titulo, mensaje, tokens);
     }
 

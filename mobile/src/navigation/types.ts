@@ -11,6 +11,7 @@ export type RootStackParamList = {
   Login: undefined;
   ConfigurarServidor: undefined;
   CambiarPassword: undefined;
+  Permisos: {onPermissionsGranted?: () => void; usuarioId?: number};
   Home: undefined;
   Catalogos: undefined;
   Perfil: undefined;

@@ -1,5 +1,6 @@
 package pe.sistema.insectosbeneficos.dispositivos;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -27,13 +28,24 @@ public class DispositivoTokenRepository implements PanacheRepositoryBase<Disposi
         return list("activo = true");
     }
 
+    /**
+     * Todos los tokens activos EXCEPTO los de un usuario específico.
+     * Null-safe: si excludeUsuarioId es null, retorna todos los activos.
+     */
+    public List<DispositivoToken> findAllActivosExcluding(Long excludeUsuarioId) {
+        if (excludeUsuarioId == null) {
+            return findAllActivos();
+        }
+        return list("activo = true and usuarioId != ?1", excludeUsuarioId);
+    }
+
     /** Soft delete: desactiva un token (no lo borra fisicamente). */
     public void desactivar(String fcmToken) {
-        update("activo = false, fechaActualizacion = NOW() where fcmToken = ?1", fcmToken);
+        update("activo = false, fechaActualizacion = ?1 where fcmToken = ?2", Instant.now(), fcmToken);
     }
 
     /** Desactiva todos los tokens de un usuario (logout completo). */
     public void desactivarTodosDeUsuario(Long usuarioId) {
-        update("activo = false, fechaActualizacion = NOW() where usuarioId = ?1 and activo = true", usuarioId);
+        update("activo = false, fechaActualizacion = ?1 where usuarioId = ?2 and activo = true", Instant.now(), usuarioId);
     }
 }

@@ -158,7 +158,7 @@ public class ProgramacionService {
     }
 
     @Transactional
-    public ProgramacionDto publicarProgramacion(Long id) {
+    public ProgramacionDto publicarProgramacion(Long id, Long excludeUsuarioId) {
         Programacion p = programacionRepository.findByIdOptional(id)
                 .orElseThrow(() -> new ApiException(jakarta.ws.rs.core.Response.Status.NOT_FOUND, "PROGRAMACION_NO_ENCONTRADA", "Programacion no encontrada"));
 
@@ -171,7 +171,7 @@ public class ProgramacionService {
         // HITO-018: correo real a Sanidad (RF-137/146, RN-018/039). Best-effort:
         // un fallo de SMTP se loguea en NotificacionService y NUNCA rompe la
         // publicacion (antes esto era un System.out.println falso).
-        notificacionService.notificarProgramacionPublicada(p);
+        notificacionService.notificarProgramacionPublicada(p, excludeUsuarioId);
         return mapper.toDto(p);
     }
 

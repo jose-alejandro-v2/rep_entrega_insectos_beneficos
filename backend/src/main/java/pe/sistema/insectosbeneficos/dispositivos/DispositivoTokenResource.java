@@ -9,6 +9,7 @@ import jakarta.ws.rs.core.Response;
 
 import pe.sistema.insectosbeneficos.dispositivos.dto.DispositivoTokenDto;
 import pe.sistema.insectosbeneficos.dispositivos.dto.RegistrarTokenRequest;
+import pe.sistema.insectosbeneficos.seguridad.ActualUsuario;
 
 import java.util.List;
 
@@ -21,6 +22,7 @@ import java.util.List;
  *   GET    /api/v1/dispositivos-token           — listar mis tokens (auth required)
  *
  * RBAC: todos los roles autenticados pueden registrar sus dispositivos.
+ * Usuario derivado del JWT via ActualUsuario (HITO-018 fix v1.14.2).
  */
 @Path("/api/v1/dispositivos-token")
 @Produces(MediaType.APPLICATION_JSON)
@@ -30,19 +32,20 @@ public class DispositivoTokenResource {
     @Inject
     DispositivoTokenService service;
 
+    @Inject
+    ActualUsuario actualUsuario;
+
     /**
      * Registra un token FCM para el usuario autenticado.
-     * Si el token ya existe, lo reactiva.
+     * Si el token ya existe, lo reactiva y reasigna al usuario actual.
      */
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
-    public Response registrar(@Valid RegistrarTokenRequest req,
-                              @HeaderParam("X-Usuario-Id") Long usuarioId) {
-        // El usuarioId viene del JWT (extraido por el filter o del header).
-        // En produccion se obtiene del JWT claim; por ahora se usa header.
+    public Response registrar(@Valid RegistrarTokenRequest req) {
+        Long usuarioId = actualUsuario.getId();
         if (usuarioId == null) {
             return Response.status(Response.Status.BAD_REQUEST)
-                    .entity("{\"error\":\"X-Usuario-Id header requerido\"}")
+                    .entity("{\"error\":\"Usuario no autenticado\"}")
                     .build();
         }
         DispositivoTokenDto dto = service.registrar(usuarioId, req);
@@ -63,7 +66,8 @@ public class DispositivoTokenResource {
      * Lista los tokens activos del usuario autenticado.
      */
     @GET
-    public List<DispositivoTokenDto> listar(@HeaderParam("X-Usuario-Id") Long usuarioId) {
+    public List<DispositivoTokenDto> listar() {
+        Long usuarioId = actualUsuario.getId();
         if (usuarioId == null) {
             return List.of();
         }

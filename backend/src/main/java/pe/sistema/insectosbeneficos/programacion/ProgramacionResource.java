@@ -9,6 +9,7 @@ import jakarta.ws.rs.core.Response;
 import pe.sistema.insectosbeneficos.programacion.dto.CrearProgramacionRequest;
 import pe.sistema.insectosbeneficos.programacion.dto.ProgramacionDto;
 import pe.sistema.insectosbeneficos.programacion.dto.UpdateProgramacionRequest;
+import pe.sistema.insectosbeneficos.seguridad.ActualUsuario;
 import java.util.List;
 
 @Path("/api/v1/programaciones")
@@ -18,6 +19,9 @@ public class ProgramacionResource {
 
     @Inject
     ProgramacionService programacionService;
+
+    @Inject
+    ActualUsuario actualUsuario;
 
     @GET
     public List<ProgramacionDto> getProgramaciones(@QueryParam("anio") Integer anio, @QueryParam("mes") Integer mes) {
@@ -54,10 +58,15 @@ public class ProgramacionResource {
         return programacionService.updateProgramacion(id, request);
     }
 
+    /**
+     * POST /api/v1/programaciones/{id}/publicar — publica y notifica.
+     * excludeUsuarioId se deriva del JWT (ActualUsuario) para excluir al remitente.
+     */
     @POST
     @Path("/{id}/publicar")
     @RolesAllowed({"Super Admin", "Admin"})
     public ProgramacionDto publicarProgramacion(@PathParam("id") Long id) {
-        return programacionService.publicarProgramacion(id);
+        Long excludeUsuarioId = actualUsuario.getId();
+        return programacionService.publicarProgramacion(id, excludeUsuarioId);
     }
 }

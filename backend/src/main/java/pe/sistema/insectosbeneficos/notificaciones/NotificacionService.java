@@ -45,15 +45,16 @@ public class NotificacionService {
     // ------------------------------------------------------------------
 
     /**
-     * Notifica por correo + push a TODOS los usuarios del rol "Usuario" (Sanidad)
-     * ACTIVOS que tengan email cargado que la programacion fue publicada.
+     * Notifica por correo + push a TODOS los usuarios ACTIVOS que tengan email cargado
+     * que la programacion fue publicada (Admin + Usuario).
+     * El push broadcast EXCLUYE al usuario que publicó (para que no reciba su propia notificación).
      */
-    public void notificarProgramacionPublicada(Programacion p) {
+    public void notificarProgramacionPublicada(Programacion p, Long excludeUsuarioId) {
         try {
-            List<Usuario> sanidad = Usuario.list(
-                    "rol.nombre = ?1 and estado = ?2",
-                    "Usuario", EstadoUsuario.ACTIVO);
-            if (sanidad.isEmpty()) {
+            List<Usuario> destinatarios = Usuario.list(
+                    "estado = ?1",
+                    EstadoUsuario.ACTIVO);
+            if (destinatarios.isEmpty()) {
                 return;
             }
             String especie = p.getEspecie() != null && p.getEspecie().getNombre() != null
@@ -64,7 +65,7 @@ public class NotificacionService {
             String tituloPush = "Nueva programación disponible";
             String mensajePush = "Se publicó la programación de " + especie + " para " + periodo;
 
-            for (Usuario u : sanidad) {
+            for (Usuario u : destinatarios) {
                 // Persistir notificacion in-app
                 persistir(u.id, tituloPush, mensajePush, "PROGRAMACION_PUBLICADA",
                         "PROGRAMACION", p.getId());
@@ -77,8 +78,8 @@ public class NotificacionService {
                 }
             }
 
-            // Push broadcast a todos los usuarios activos con token
-            pushService.enviarBroadcast(tituloPush, mensajePush);
+            // Push broadcast excluyendo al que publicó
+            pushService.enviarBroadcastExcluding(tituloPush, mensajePush, excludeUsuarioId);
         } catch (Exception e) {
             LOG.error("Fallo la notificacion de programacion publicada", e);
         }
@@ -92,6 +93,8 @@ public class NotificacionService {
             Integer stockBase, List<pe.sistema.insectosbeneficos.programacion.DetalleProgramacion> detalles) {
         StringBuilder h = new StringBuilder();
         h.append("<!DOCTYPE html><html lang=\"es\"><head><meta charset=\"UTF-8\"></head><body>");
+                h.append("<p>Este es solo un <b>Correo de Prueba de Aplicativo: Entrega de Insectos Benéficos...</b> </p>");
+
         h.append("<p>Hola ").append(escapeHtml(nombreUsuario)).append(",</p>");
         h.append("<p>Se public&oacute; la programaci&oacute;n de <strong>")
                 .append(escapeHtml(especie)).append("</strong> para <strong>")
@@ -184,6 +187,7 @@ public class NotificacionService {
     /**
      * Notifica por push BROADCAST a todos los usuarios que un nuevo requerimiento
      * fue registrado por un usuario de Sanidad.
+     * El push broadcast EXCLUYE al usuario que creó el requerimiento.
      */
     public void notificarRequerimientoCreado(Requerimiento r) {
         try {
@@ -206,8 +210,8 @@ public class NotificacionService {
                         "REQUERIMIENTO", r.getId());
             }
 
-            // Push broadcast a todos los usuarios activos con token
-            pushService.enviarBroadcast(titulo, mensaje);
+            // Push broadcast excluyendo al que creó el requerimiento
+            pushService.enviarBroadcastExcluding(titulo, mensaje, r.getCreadoPor());
         } catch (Exception e) {
             LOG.error("Fallo la notificacion de requerimiento creado", e);
         }

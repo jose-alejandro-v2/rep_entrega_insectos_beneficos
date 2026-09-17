@@ -1,6 +1,7 @@
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
+apply plugin: "com.google.gms.google-services"
 
 /**
  * This is the configuration block to customize your React Native Android app.
@@ -91,13 +92,13 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace "com.insectosbeneficios"
+    namespace "com.insectosbeneficos"
     defaultConfig {
-        applicationId "com.insectosbeneficios"
+        applicationId "com.insectosbeneficos"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 18
-        versionName "1.14.0"
+        versionCode 19
+        versionName "1.14.2"
     }
     signingConfigs {
         debug {
@@ -107,7 +108,7 @@ android {
             keyPassword 'android'
         }
         release {
-            // H9: keystore de produccion propio (insectos-beneficios-release.keystore).
+            // H9: keystore de produccion propio (insectos-beneficos-release.keystore).
             // Cae a la firma debug SOLO si keystore.properties falta (dev local).
             // rootProject.file() resuelve relativo a mobile/android/ (donde vive
             // keystore.properties y el keystore esta en app/).
@@ -142,6 +143,10 @@ android {
 dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
+
+    // Firebase Cloud Messaging (ADR-A004) — el BOM gestiona las versiones.
+    implementation(platform("com.google.firebase:firebase-bom:34.19.0"))
+    implementation("com.google.firebase:firebase-messaging")
 
     if (hermesEnabled.toBoolean()) {
         implementation("com.facebook.react:hermes-android")

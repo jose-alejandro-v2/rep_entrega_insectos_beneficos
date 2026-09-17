@@ -1,5 +1,5 @@
-import React from 'react';
-import {ActivityIndicator, StyleSheet, View} from 'react-native';
+import React, {useState, useEffect, useCallback} from 'react';
+import {ActivityIndicator, Platform, StyleSheet, View} from 'react-native';
 import {NavigationContainer} from '@react-navigation/native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {useAuth} from '../context/AuthContext';
@@ -26,24 +26,76 @@ import LiberacionListScreen from '../screens/LiberacionListScreen';
 import LiberacionFormScreen from '../screens/LiberacionFormScreen';
 import DetalleRequerimientoScreen from '../screens/DetalleRequerimientoScreen';
 import NotificacionesScreen from '../screens/NotificacionesScreen';
+import PermissionsScreen from '../screens/PermissionsScreen';
+import NotificationService from '../services/NotificationService';
 import {theme} from '../theme';
 import type {RootStackParamList} from './types';
+import {PermissionsAndroid} from 'react-native';
+import {getMessaging, requestPermission, AuthorizationStatus} from '@react-native-firebase/messaging';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 /**
- * Navegación condicional por estado de autenticación (modelo reutilizable
- * §8.3 + ADR-A003):
- * - Sin sesión               → ServerCheck → Login (+ Configurar servidor).
- * - Sesión con reset de pwd  → CambiarPassword (única pantalla, sin back).
- * - Sesión normal            → Home según perfil + placeholders + Settings.
- * La `key` del Navigator fuerza el remontaje del stack en cada transición de
+ * Verifica si los permisos obligatorios (camara + notificaciones) estan otorgados.
+ */
+async function checkPermissionsGranted(): Promise<boolean> {
+  try {
+    // Camara
+    let cameraOk = false;
+    if (Platform.OS === 'android') {
+      cameraOk = await PermissionsAndroid.check(
+        PermissionsAndroid.PERMISSIONS.CAMERA,
+      );
+    } else {
+      cameraOk = true;
+    }
+
+    // Notificaciones
+    let notifOk = false;
+    try {
+      const messaging = getMessaging();
+      const authStatus = await requestPermission(messaging);
+      notifOk =
+        authStatus === AuthorizationStatus.AUTHORIZED ||
+        authStatus === AuthorizationStatus.PROVISIONAL;
+    } catch {
+      notifOk = false;
+    }
+
+    return cameraOk && notifOk;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Navegacion condicional por estado de autenticacion (modelo reutilizable
+ * 8.3 + ADR-A003):
+ * - Sin sesion               -> ServerCheck -> Login (+ Configurar servidor).
+ * - Sesion con reset de pwd  -> CambiarPassword (unica pantalla, sin back).
+ * - Sesion normal + sin permisos -> Permisos (obligatorio otorgar).
+ * - Sesion normal + permisos  -> Home segun perfil + placeholders + Settings.
+ * La `key` del Navigator fuerza el remontaje del stack en cada transicion de
  * estado para evitar restos de historial entre flujos.
  */
 export default function RootNavigator() {
   const {user, loading} = useAuth();
+  const [permissionsGranted, setPermissionsGranted] = useState<boolean | null>(null);
 
-  if (loading) {
+  useEffect(() => {
+    if (user && !user.passwordResetRequired) {
+      checkPermissionsGranted().then(setPermissionsGranted);
+    }
+  }, [user]);
+
+  // Inicializar NotificationService cuando los permisos se otorgan
+  useEffect(() => {
+    if (permissionsGranted && user && !user.passwordResetRequired) {
+      NotificationService.initialize(Number(user.sub));
+    }
+  }, [permissionsGranted, user]);
+
+  if (loading || (user && !user.passwordResetRequired && permissionsGranted === null)) {
     return (
       <View style={styles.splash}>
         <ActivityIndicator size="large" color={theme.colors.action.secondary} />
@@ -55,7 +107,9 @@ export default function RootNavigator() {
     ? 'anon'
     : user.passwordResetRequired
       ? `reset-${user.sub ?? 'user'}`
-      : `home-${user.sub ?? 'user'}`;
+      : permissionsGranted === false
+        ? `perms-${user.sub ?? 'user'}`
+        : `home-${user.sub ?? 'user'}`;
 
   return (
     <NavigationContainer>
@@ -82,6 +136,16 @@ export default function RootNavigator() {
           <Stack.Screen
             name="CambiarPassword"
             component={CambiarPasswordScreen}
+            options={{headerShown: false, gestureEnabled: false}}
+          />
+        ) : permissionsGranted === false ? (
+          <Stack.Screen
+            name="Permisos"
+            component={PermissionsScreen}
+            initialParams={{
+              onPermissionsGranted: () => setPermissionsGranted(true),
+              usuarioId: user.sub ? Number(user.sub) : undefined,
+            }}
             options={{headerShown: false, gestureEnabled: false}}
           />
         ) : (

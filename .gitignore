@@ -37,7 +37,10 @@ mobile/.env.local
 
 # Keystore de firma de produccion (NUNCA subir a git) - H9
 mobile/android/keystore.properties
-mobile/android/app/insectos-beneficios-release.keystore
+mobile/android/app/insectos-beneficos-release.keystore
+
+# Credenciales Firebase (service account admin SDK = SECRETO, NUNCA subir a git)
+_firebase/
 
 # Uploads runtime (volumen Docker, no versionar)
 backend/uploads/

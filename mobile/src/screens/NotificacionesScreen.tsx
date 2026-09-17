@@ -36,13 +36,21 @@ export default function NotificacionesScreen() {
   const [notificaciones, setNotificaciones] = useState<Notificacion[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const cargarNotificaciones = useCallback(async () => {
     try {
+      setError(null);
       const res = await api.get('/notificaciones');
       setNotificaciones(res.data);
-    } catch (error) {
-      console.error('[NotificacionesScreen] Error al cargar notificaciones:', error);
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.mensaje ||
+        err?.response?.data?.error ||
+        err?.message ||
+        'Error al cargar notificaciones';
+      setError(msg);
+      console.error('[NotificacionesScreen] Error al cargar notificaciones:', err);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -64,8 +72,8 @@ export default function NotificacionesScreen() {
       setNotificaciones(prev =>
         prev.map(n => (n.id === id ? {...n, leido: true} : n)),
       );
-    } catch (error) {
-      console.error('[NotificacionesScreen] Error al marcar como leída:', error);
+    } catch (err) {
+      console.error('[NotificacionesScreen] Error al marcar como leída:', err);
     }
   };
 
@@ -92,6 +100,13 @@ export default function NotificacionesScreen() {
         {loading ? (
           <View style={styles.center}>
             <Text style={styles.emptyText}>Cargando notificaciones...</Text>
+          </View>
+        ) : error ? (
+          <View style={styles.center}>
+            <Text style={styles.errorText}>{error}</Text>
+            <Text style={styles.retryText} onPress={cargarNotificaciones}>
+              Reintentar
+            </Text>
           </View>
         ) : notificaciones.length === 0 ? (
           <View style={styles.center}>
@@ -127,10 +142,22 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 24,
   },
   emptyText: {
     fontSize: 16,
     color: theme.colors.text.secondary,
+  },
+  errorText: {
+    fontSize: 16,
+    color: theme.colors.status.error,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  retryText: {
+    fontSize: 15,
+    color: theme.colors.action.primary,
+    textDecorationLine: 'underline',
   },
   list: {
     padding: 16,
