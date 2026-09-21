@@ -52,8 +52,8 @@ public class NotificacionService {
     public void notificarProgramacionPublicada(Programacion p, Long excludeUsuarioId) {
         try {
             List<Usuario> destinatarios = Usuario.list(
-                    "estado = ?1",
-                    EstadoUsuario.ACTIVO);
+                    "estado = ?1 and rol.nombre = ?2",
+                    EstadoUsuario.ACTIVO, "Usuario");
             if (destinatarios.isEmpty()) {
                 return;
             }

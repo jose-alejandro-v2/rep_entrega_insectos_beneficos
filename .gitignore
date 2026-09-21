@@ -44,3 +44,6 @@ _firebase/
 
 # Uploads runtime (volumen Docker, no versionar)
 backend/uploads/
+
+# Paquete de despliegue (JAR pre-compilado + secrets, no versionar)
+deploy-package/

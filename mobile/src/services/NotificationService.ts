@@ -160,8 +160,9 @@ class NotificationServiceClass {
     }
 
     onMessage(this.messagingInstance, async (remoteMessage: RemoteMessage) => {
-      const titulo = remoteMessage.notification?.title || 'Notificación';
-      const mensaje = remoteMessage.notification?.body || '';
+      // Soportar ambos formatos: payload "notification" (Firebase) y "data" (custom)
+      const titulo = remoteMessage.notification?.title || remoteMessage.data?.titulo || 'Notificación';
+      const mensaje = remoteMessage.notification?.body || remoteMessage.data?.mensaje || '';
 
       console.log('[NotificationService] Mensaje en foreground:', titulo, mensaje);
 
@@ -186,7 +187,7 @@ class NotificationServiceClass {
    */
   private setupNotificationOpenedListener(): void {
     // Listener de @notifee para acciones de notificación
-    notifee.onForegroundEvent(async ({type, detail}: Event) => {
+    notifee.onForegroundEvent(async ({type, _detail}: Event) => {
       if (type === EventType.PRESS) {
         console.log('[NotificationService] Notificación presionada en foreground');
         // TODO: navegar a pantalla relevante cuando se implemente deep linking
@@ -194,7 +195,7 @@ class NotificationServiceClass {
     });
 
     // Listener de Firebase para app en background
-    onNotificationOpenedApp(this.messagingInstance!, remoteMessage => {
+    onNotificationOpenedApp(this.messagingInstance!, _remoteMessage => {
       console.log('[NotificationService] App abierta desde notificación (background)');
       // TODO: navegar a pantalla relevante cuando se implemente deep linking
     });

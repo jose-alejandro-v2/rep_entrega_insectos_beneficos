@@ -1,0 +1,74 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# DESPLIEGUE EN PRODUCCIÓN — Servidor .24
+# Patrón idéntico a repo_control_equipos_apilamiento_v2
+#
+# Backend se compila en el servidor desde backend/Dockerfile (multi-stage).
+# Puerto backend: 6113 | Puerto nginx: 6114
+#
+# Uso:
+#   cd ~/repo_entrega_insectos_beneficos
+#   docker compose -f docker-compose.prod.yml up -d --build
+# ═══════════════════════════════════════════════════════════════════════════════
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: insectos-beneficos-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: insectos_beneficos
+      POSTGRES_USER: insectos_dev
+      POSTGRES_PASSWORD: insectos_dev_password_2026
+      TZ: America/Lima
+    command: ["postgres", "-c", "timezone=America/Lima"]
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U insectos_dev -d insectos_beneficos"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: insectos-beneficos-backend
+    restart: unless-stopped
+    ports:
+      - "6113:6101"
+    environment:
+      TZ: America/Lima
+      QUARKUS_DATASOURCE_JDBC_URL: jdbc:postgresql://postgres:5432/insectos_beneficos
+      QUARKUS_DATASOURCE_USERNAME: insectos_dev
+      QUARKUS_DATASOURCE_PASSWORD: insectos_dev_password_2026
+      QUARKUS_MAILER_HOST: ${QUARKUS_MAILER_HOST:-10.13.10.10}
+      QUARKUS_MAILER_PORT: ${QUARKUS_MAILER_PORT:-25}
+      QUARKUS_MAILER_START_TLS: ${QUARKUS_MAILER_START_TLS:-DISABLED}
+      QUARKUS_MAILER_USERNAME: ${QUARKUS_MAILER_USERNAME:-}
+      QUARKUS_MAILER_PASSWORD: ${QUARKUS_MAILER_PASSWORD:-}
+      QUARKUS_MAILER_FROM: ${QUARKUS_MAILER_FROM:-notificaciones.noreply@vanguardfresh.com}
+      GOOGLE_FIREBASE_CREDENTIALS: ${GOOGLE_FIREBASE_CREDENTIALS:-/app/firebase-service-account.json}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - uploads_data:/app/uploads
+      - ./_firebase/apkinsectosbeneficos-firebase-adminsdk-fbsvc-768d2ba7d3.json:/app/firebase-service-account.json:ro
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: insectos-beneficos-nginx
+    restart: unless-stopped
+    ports:
+      - "6114:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend
+
+volumes:
+  pg_data:
+  uploads_data:

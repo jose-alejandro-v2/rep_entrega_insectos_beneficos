@@ -30,7 +30,7 @@ interface PermissionStatus {
  * Se muestra despues del login si el usuario no ha otorgado permisos
  * de camara y notificaciones. Obligatoria para continuar.
  */
-export default function PermissionsScreen({navigation, route}: Props) {
+export default function PermissionsScreen({_navigation, route}: Props) {
   const [permissions, setPermissions] = useState<PermissionStatus>({
     camera: false,
     notifications: false,

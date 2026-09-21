@@ -210,6 +210,9 @@ public class RequerimientoService {
             persistirPlagasPivote(r, plagaIds);
         }
 
+        // Notificar creación de requerimiento (push broadcast + in-app)
+        notificacionService.notificarRequerimientoCreado(r);
+
         return mapper.toDto(r);
     }
 
@@ -287,6 +290,9 @@ public class RequerimientoService {
         if (!plagaIds.isEmpty()) {
             persistirPlagasPivote(r, plagaIds);
         }
+
+        // Notificar cambio de estado (push dirigido al solicitante + in-app)
+        notificacionService.notificarCambioEstado(r, estadoAnterior, req.getEstado());
 
         // HITO-018: correo al solicitante cuando el requerimiento pasa a ENTREGADO
         // (RF-166/RN-027). Best-effort (NotificacionService nunca lanza).
