@@ -16,7 +16,7 @@ services:
     container_name: insectos-beneficos-postgres
     restart: unless-stopped
     ports:
-      - "5432:5432"
+      - "6115:5432"
     environment:
       POSTGRES_DB: insectos_beneficos
       POSTGRES_USER: insectos_dev
