@@ -57,7 +57,7 @@ login y roles `admin/user`). Este ADR registra los cambios y delega la reconcili
 ### D-AUTH-6 — Stack/entorno
 
 - Backend Quarkus (Java 17), PostgreSQL 16 en **Docker** (`docker-compose.yml` raíz), Flyway (V1 esquema, V2 seed).
-- JWT local (smallrye-jwt), BCrypt (`at.favre.lib:bcrypt`), puerto backend **6101** (mantiene `config.ts` mobile).
+- JWT local (smallrye-jwt), BCrypt (`at.favre.lib:bcrypt`), puerto backend **6113** (mantiene `config.ts` mobile).
 - Mobile React Native CLI (sin Expo): react-navigation; pantallas de destino (requerimientos/programación) = placeholders en esta vertical.
 
 ## Consecuencias

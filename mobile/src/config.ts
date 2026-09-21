@@ -17,6 +17,6 @@
  * tener URL guardada ServerCheck obliga al usuario a ingresar la IP real.
  * En el entorno de desarrollo (emulador/máquina local) sí funciona.
  */
-const API_BASE_URL = 'http://localhost:6101/api/v1';
+const API_BASE_URL = 'http://10.13.10.24:6113/api/v1';
 
 export default API_BASE_URL;

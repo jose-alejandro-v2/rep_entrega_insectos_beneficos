@@ -78,7 +78,7 @@ export default function SettingsScreen() {
 
             <Text style={styles.hint}>
               Escriba solo la IP (ej. 10.13.18.93). App completa
-              http://IP:6101/api/v1 automáticamente.
+              http://IP:6113/api/v1 automáticamente.
             </Text>
 
             {message ? <Text style={styles.message}>{message}</Text> : null}

@@ -10,7 +10,7 @@
   "components": [
     { "id": "mobile", "type": "frontend", "label": "React Native CLI", "sublabel": "App Android · Offline", "pos": [40, 200], "size": [160, 60], "tag": "v1.8.0" },
     { "id": "nginx", "type": "cloud", "label": "Nginx", "sublabel": "Reverse Proxy", "pos": [280, 200], "size": [120, 60] },
-    { "id": "quarkus", "type": "backend", "label": "Quarkus API", "sublabel": "Java :6101", "pos": [480, 200], "size": [140, 60], "tag": "10 módulos" },
+    { "id": "quarkus", "type": "backend", "label": "Quarkus API", "sublabel": "Java :6113", "pos": [480, 200], "size": [140, 60], "tag": "10 módulos" },
     { "id": "postgres", "type": "database", "label": "PostgreSQL 16", "sublabel": ":5432", "pos": [700, 140], "size": [140, 60], "tag": "Flyway V1-V17" },
     { "id": "filesystem", "type": "database", "label": "Filesystem", "sublabel": "Fotos JPG/PNG", "pos": [700, 260], "size": [140, 60], "tag": "≤5MB" }
   ],
@@ -25,7 +25,7 @@
   ],
   "cards": [
     { "dot": "cyan", "title": "Mobile", "items": ["React Native CLI 0.86 / React 19", "23 pantallas · React Navigation", "Offline: SQLite + Drizzle ORM + outbox", "Fotos: usePhotoCapture hook"] },
-    { "dot": "emerald", "title": "Backend", "items": ["Quarkus Java · Puerto 6101", "JWT auth (3 pasos: rol→usuario→DNI)", "10 módulos: auth, programación, requerimientos,", "despachos, recepciones, liberaciones, catálogos, sync"] },
+    { "dot": "emerald", "title": "Backend", "items": ["Quarkus Java · Puerto 6113", "JWT auth (3 pasos: rol→usuario→DNI)", "10 módulos: auth, programación, requerimientos,", "despachos, recepciones, liberaciones, catálogos, sync"] },
     { "dot": "violet", "title": "Datos", "items": ["PostgreSQL 16 (Docker)", "Filesystem: fotos metadatos inmutables", "Flyway V1-V17 (17 migraciones)", "SQLite offline: Drizzle ORM"] }
   ]
 }

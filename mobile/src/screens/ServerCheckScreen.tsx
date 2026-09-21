@@ -123,7 +123,7 @@ export default function ServerCheckScreen() {
 
               <Text style={styles.hint}>
                 Escriba la IP o URL del servidor. La aplicación completa
-                http://IP:6101/api/v1 cuando corresponda.
+                http://IP:6113/api/v1 cuando corresponda.
               </Text>
 
               <AppButton

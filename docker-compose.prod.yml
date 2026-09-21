@@ -38,7 +38,7 @@ services:
     container_name: insectos-beneficos-backend
     restart: unless-stopped
     ports:
-      - "6113:6101"
+      - "6113:6113"
     environment:
       TZ: America/Lima
       QUARKUS_DATASOURCE_JDBC_URL: jdbc:postgresql://postgres:5432/insectos_beneficos

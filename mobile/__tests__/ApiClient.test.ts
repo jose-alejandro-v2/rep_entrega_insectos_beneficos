@@ -63,42 +63,50 @@ describe('extractErrorMessage', () => {
 /**
  * normalizeApiUrl — autocompletado de URL del backend (2026-08-20): el usuario
  * tiene 2 redes Wi-Fi (IP de la laptop cambia: 10.13.18.93 / 192.168.18.229) y
- * digita SOLO la IP; la app completa `http://IP:6101/api/v1`. Los casos cubren
- * la tabla del §32.5 y la idempotencia sobre URLs ya guardadas en el Keychain.
+ * digita SOLO la IP; la app completa `http://IP:6113/api/v1`. Si el usuario
+ * especifica puerto (ej. 6113 para Docker en .24), se respeta.
  */
 describe('normalizeApiUrl', () => {
   test('IP simple de la red 10.13.18.x → completa puerto y /api/v1', () => {
-    expect(normalizeApiUrl('10.13.18.93')).toBe('http://10.13.18.93:6101/api/v1');
+    expect(normalizeApiUrl('10.13.18.93')).toBe('http://10.13.18.93:6113/api/v1');
   });
 
   test('IP simple de la red LUZ-5G → completa puerto y /api/v1', () => {
-    expect(normalizeApiUrl('192.168.1.10')).toBe('http://192.168.1.10:6101/api/v1');
+    expect(normalizeApiUrl('192.168.1.10')).toBe('http://192.168.1.10:6113/api/v1');
   });
 
   test('IP con barra final → se limpia y completa', () => {
-    expect(normalizeApiUrl('192.168.1.10/')).toBe('http://192.168.1.10:6101/api/v1');
+    expect(normalizeApiUrl('192.168.1.10/')).toBe('http://192.168.1.10:6113/api/v1');
   });
 
-  test('localhost → host sin puerto recibe :6101 y /api/v1', () => {
-    expect(normalizeApiUrl('localhost')).toBe('http://localhost:6101/api/v1');
+  test('localhost → host sin puerto recibe :6113 y /api/v1', () => {
+    expect(normalizeApiUrl('localhost')).toBe('http://localhost:6113/api/v1');
   });
 
-  test('URL con puerto diferente → puerto reemplazado a 6101', () => {
+  test('URL con puerto diferente → se preserva el puerto', () => {
     expect(normalizeApiUrl('http://miservidor:8080/api/v1')).toBe(
-      'http://miservidor:6101/api/v1',
+      'http://miservidor:8080/api/v1',
     );
   });
 
-  test('URL con puerto pero sin base path → reemplaza puerto y añade /api/v1', () => {
+  test('URL con puerto pero sin base path → preserva puerto y añade /api/v1', () => {
     expect(normalizeApiUrl('http://miservidor:8080')).toBe(
-      'http://miservidor:6101/api/v1',
+      'http://miservidor:8080/api/v1',
     );
   });
 
   test('URL completa del formato actual → idempotente (Keychain)', () => {
-    expect(normalizeApiUrl('http://10.13.18.93:6101/api/v1')).toBe(
-      'http://10.13.18.93:6101/api/v1',
+    expect(normalizeApiUrl('http://10.13.18.93:6113/api/v1')).toBe(
+      'http://10.13.18.93:6113/api/v1',
     );
+  });
+
+  test('IP con puerto 6113 (Docker prod) → respeta puerto', () => {
+    expect(normalizeApiUrl('10.13.10.24:6113')).toBe('http://10.13.10.24:6113/api/v1');
+  });
+
+  test('IP sin puerto → usa 6113 por defecto', () => {
+    expect(normalizeApiUrl('10.13.10.24')).toBe('http://10.13.10.24:6113/api/v1');
   });
 
   test('string vacío → se conserva vacío (comportamiento actual)', () => {

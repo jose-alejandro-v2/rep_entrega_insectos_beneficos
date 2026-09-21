@@ -22,7 +22,7 @@ jest.mock('../src/services/ApiClient', () => {
   return {
     ...actual,
     getFotoUrl: jest.fn(async (reqId: number, fotoId: number) =>
-      `http://localhost:6101/api/v1/requerimientos/${reqId}/fotos/${fotoId}/imagen`,
+      `http://localhost:6113/api/v1/requerimientos/${reqId}/fotos/${fotoId}/imagen`,
     ),
   };
 });
@@ -163,11 +163,11 @@ describe('HistorialRequerimientoScreen — fotos en detalle (HITO-011)', () => {
 
     // Verificar que aparecen las fotos (thumbnails con uri correcta)
     const fotoImages = tree.root.findAll(
-      (node: any) => node.props.source && node.props.source.uri === 'http://localhost:6101/api/v1/requerimientos/1/fotos/10/imagen',
+      (node: any) => node.props.source && node.props.source.uri === 'http://localhost:6113/api/v1/requerimientos/1/fotos/10/imagen',
     );
     expect(fotoImages.length).toBeGreaterThanOrEqual(1);
     const foto2Images = tree.root.findAll(
-      (node: any) => node.props.source && node.props.source.uri === 'http://localhost:6101/api/v1/requerimientos/1/fotos/11/imagen',
+      (node: any) => node.props.source && node.props.source.uri === 'http://localhost:6113/api/v1/requerimientos/1/fotos/11/imagen',
     );
     expect(foto2Images.length).toBeGreaterThanOrEqual(1);
   });

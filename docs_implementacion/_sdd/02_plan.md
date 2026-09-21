@@ -39,7 +39,7 @@ Vertical incremental: BD (Flyway V1/V2) → backend (auth JWT + CRUD + tests) �
 # 4. Arquitectura General
 
 ```text
-mobile (RN CLI) ──► backend API Quarkus (:6101) ──► PostgreSQL 16 (Docker)
+mobile (RN CLI) ──► backend API Quarkus (:6113) ──► PostgreSQL 16 (Docker)
        JWT local                          Flyway V1/V2
 ```
 

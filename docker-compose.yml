@@ -48,7 +48,7 @@ services:
       # Firebase FCM (ADR-A004: notificaciones push).
       GOOGLE_FIREBASE_CREDENTIALS: ${GOOGLE_FIREBASE_CREDENTIALS:-/app/firebase-service-account.json}
     ports:
-      - "6101:6101"
+      - "6113:6113"
     volumes:
       - uploads_data:/app/uploads
       # Service account Firebase (NUNCA se versiona: _firebase/ está en .gitignore).
