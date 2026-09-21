@@ -173,6 +173,7 @@ class NotificationServiceClass {
         android: {
           channelId: CHANNEL_GENERAL,
           pressAction: {id: 'default'},
+          smallIcon: 'ic_stat_vanguard',
         },
         ios: {
           sound: 'default',

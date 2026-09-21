@@ -6,6 +6,26 @@
 
 const versionHistory = [
   {
+    version: '1.14.4',
+    fecha: '2026-09-21',
+    cambios: [
+      'Icono de notificación personalizado: las notificaciones ahora muestran el isotipo Vanguard (silueta blanca) en la barra de notificaciones del sistema, tanto en foreground como en background.',
+      'AndroidManifest: meta-data com.google.firebase.messaging.default_notification_icon apuntando a @drawable/ic_stat_vanguard.',
+      'NotificationService: smallIcon explícito en notifee.displayNotification para notificaciones en foreground.',
+      'Density buckets generados (mdpi→xxxhdpi) desde el isotipo blanco transparente, centrado en canvas cuadrado sin distorsión.',
+    ],
+  },
+  {
+    version: '1.14.3',
+    fecha: '2026-09-21',
+    cambios: [
+      'Unificación de puerto: backend ahora usa 6113 en todos los ambientes (dev y producción), eliminando la confusión de puertos.',
+      'URL por defecto: la app ahora inicia con http://10.13.10.24:6113/api/v1 (srv .24 producción).',
+      'Puerto configurable: normalizeApiUrl respeta el puerto que ingresa el usuario (ya no fuerza 6101).',
+      'Deploy: Docker compose prod con puerto 6113:6113 (sin mapeo a 6101 internamente).',
+    ],
+  },
+  {
     version: '1.14.2',
     fecha: '2026-09-17',
     cambios: [

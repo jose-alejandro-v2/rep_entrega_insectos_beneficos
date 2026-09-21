@@ -68,7 +68,7 @@ Los diagramas generados se guardan en `docs_implementacion/_diagramas/`.
 AGENTS.md
 README.md
 docker-compose.yml              (proyecto `repo_registro_insectos_beneficos`: postgres:16 + backend + nginx)
-nginx/nginx.conf                (proxy 8080 → backend:6101)
+nginx/nginx.conf                (proxy 8080 → backend:6113)
 backend/                     (API Quarkus v2 — auth/usuarios bajo /api/v1, Flyway V1-V25, Dockerfile multi-stage,
                               102 tests; imagen `repo_registro_insectos_beneficos-backend`, TZ America/Lima)
 mobile/                      (React Native CLI 0.86 / React 19.2.3 — auth v2: login 3 pasos,
@@ -103,7 +103,7 @@ vía keychain, ServerCheck/Settings de URL runtime, login 3 pasos, NotificationS
 NotificacionesScreen, 145 tests).
 **HITO-001 = Infraestructura base** (cerrado) y **HITO-002 = Auth v2** (ver §7).
 El backend corre dockerizado (compose proyecto `repo_registro_insectos_beneficos`): postgres:16 +
-imagen `repo_registro_insectos_beneficos-backend` (puerto 6101) + nginx (proxy 8080 → 6101),
+imagen `repo_registro_insectos_beneficos-backend` (puerto 6113) + nginx (proxy 8080 → 6113),
 zona horaria `America/Lima` en el contenedor (HITO-016).
 La service account de Firebase se monta como volumen read-only en el contenedor backend
 (`_firebase/apkinsectosbeneficos-firebase-adminsdk-fbsvc-768d2ba7d3.json` → `/app/firebase-service-account.json`).
@@ -287,6 +287,17 @@ y reportar al Orchestrator; no "arreglarlo" en silencio.
   proxy smtp-proxy.js eliminado). **Popups éxito**: Alert en `NuevoRequerimientoScreen` y
   `ProgramacionEdicionScreen`.
   Versión **1.14.2** / versionCode 19. Mobile: 145 tests · Backend: 102 tests (0 fallas).
+- **v1.14.3 (2026-09-21) = Unificación de puerto 6113**: backend Quarkus ahora escucha en
+  puerto 6113 (antes 6101) en todos los ambientes. `application.properties`, `nginx.conf`,
+  `docker-compose.prod.yml` y mobile (`config.ts` + `normalizeApiUrl`) alineados a 6113.
+  URL por defecto: `http://10.13.10.24:6113/api/v1`. Solo cambia la IP entre dev y prod.
+  Versión **1.14.3** / versionCode 20. Mobile: 22 tests MO · Backend: 102 tests (0 fallas).
+- **v1.14.4 (2026-09-21) = Icono de notificación personalizado Vanguard**: isotipo Vanguard
+  (silueta blanca) como small icon en la barra de notificaciones Android, tanto en foreground
+  (`notifee.displayNotification` con `smallIcon: 'ic_stat_vanguard'`) como en background/killed
+  (`AndroidManifest` meta-data `default_notification_icon`). Density buckets mdpi→xxxhdpi
+  generados desde `docs_implementacion/_img/Isotipo - Vanguard Perú - Blanco.png`.
+  Versión **1.14.4** / versionCode 21. Mobile: 145 tests · Backend: 102 tests (0 fallas).
 - Los hitos se cierran con **auditoría integral PASS + verificación + `05_hito_NNN.md` + commit** coherente.
 - `versionHistory.js` es la fuente del historial visible al usuario (mobile existente); web la adoptará.
 

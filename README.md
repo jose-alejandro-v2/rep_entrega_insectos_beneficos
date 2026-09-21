@@ -34,7 +34,7 @@ Archify está instalado como Agent Skill para OpenCode. Los diagramas generados 
 
 ```text
 docker-compose.yml   Proyecto `repo_registro_insectos_beneficos`: postgres:16 + backend + nginx
-nginx/nginx.conf     Proxy 8080 → backend:6101
+nginx/nginx.conf     Proxy 8080 → backend:6113
 backend/      API Quarkus v2 — auth/usuarios bajo /api/v1, login 3 pasos, roles en tabla, programaciones
               (tabla intra-semana Lunes/Jueves reales + Restante), catálogos
               (fundos/variedades/lotes/etapas/plagas/nematodos/patrones), requerimientos
@@ -48,7 +48,7 @@ mobile/       App React Native CLI 0.86 / React 19.2.3 — auth v2 (login 3 paso
               SecureStore/keychain), módulos Programación (Lunes/Jueves reales + Restante, pull-to-refresh,
               cumplimiento de producción), Requerimientos (multi-select lotes/plagas, evidencia de entrega
               en estado Aprobado), Catálogos (Usuarios con correo electrónico), fotos de requerimiento
-               + hook usePhotoCapture, notificaciones in-app + FCM — versión 1.14.2
+               + hook usePhotoCapture, notificaciones in-app + FCM — versión 1.14.3
 web/          Frontend React + Vite (pendiente de scaffold)
 docs_implementacion/
 ├── _sdd/                      Especificación, plan, tareas e implementación
@@ -122,7 +122,7 @@ docs_implementacion/
   endpoint fotos verificado, keystore verificado.
 - **HITO-016 cerrado (2026-09-09) = Docker del sistema + creación de programación todos los días + TZ fix**:
   backend dockerizado completo (docker-compose proyecto `repo_registro_insectos_beneficos`: postgres 16 +
-  imagen backend `:6101` + nginx `:8080`, desde BD limpia con Flyway V1-V17). **Creación** de programación
+  imagen backend `:6113` + nginx `:8080`, desde BD limpia con Flyway V1-V17). **Creación** de programación
   disponible cualquier día (el flujo crear envía `esCreacionInicial:true` y omite la restricción L/J;
   la **edición** sigue restringida a Lunes/Jueves). En "Nuevo" la tabla del mes aparece inmediatamente
   habilitada, sin esperar a seleccionar especie; la especie solo habilita "Enviar stock". Zona horaria del
@@ -168,6 +168,16 @@ docs_implementacion/
   solicita cámara + notificaciones la primera vez. **Canal notificaciones Android**: push estilo
   WhatsApp. **Popups éxito**: Alert al enviar requerimiento o publicar programación.
   Suite: **102 tests BE (0 fallas) · 145 tests MO**.
+- **v1.14.3 (2026-09-21) = Unificación de puerto 6113**: backend Quarkus ahora escucha en
+  puerto 6113 en todos los ambientes (dev y Docker prod). URL por defecto:
+  `http://10.13.10.24:6113/api/v1`. Solo cambia la IP entre ambientes.
+  Versión **1.14.3** / versionCode 20. Mobile: 22 tests MO · Backend: 102 tests (0 fallas).
+- **v1.14.4 (2026-09-21) = Icono de notificación personalizado Vanguard**: isotipo Vanguard
+  (silueta blanca) como small icon en la barra de notificaciones Android, tanto en foreground
+  (`notifee.displayNotification` con `smallIcon: 'ic_stat_vanguard'`) como en background/killed
+  (`AndroidManifest` meta-data `default_notification_icon`). Density buckets mdpi→xxxhdpi
+  generados desde el isotipo blanco transparente. Versión **1.14.4** / versionCode 21.
+  Mobile: 145 tests · Backend: 102 tests (0 fallas).
 - **Pendientes**: frontend web (React/Vite) y CI/CD (GitHub Actions).
   Ver [`docs_implementacion/_sdd/`](docs_implementacion/_sdd/).
 

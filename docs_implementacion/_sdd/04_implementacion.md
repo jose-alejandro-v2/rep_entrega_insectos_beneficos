@@ -10,9 +10,9 @@
 | Documento | 04_IMPLEMENTACION — Estado e historial de implementación |
 | Proyecto | Sistema de Control de Entrega de Insectos Benéficos |
 | Tipo Documento | SDD (historial de implementación) |
-| Estado | v1.14.2: fix notificaciones in-app + push + logout + token reassign; ActualUsuario JWT en recursos; 102 tests BE, 145 tests MO |
-| Versión | 1.14.2 / versionCode 18 |
-| Fecha | 2026-09-17 |
+| Estado | v1.14.4: icono de notificación personalizado Vanguard en barra de notificaciones Android; 102 tests BE, 145 tests MO |
+| Versión | 1.14.4 / versionCode 21 |
+| Fecha | 2026-09-21 |
 | Responsable | Orchestrator / Developer |
 | Repositorio | C:\repos\rep_entrega_insectos_beneficos |
 | Clasificación | Interno |
@@ -74,7 +74,7 @@ artefactos de cierre → commit único coherente.
 # 7. Arquitectura General del Sistema
 
 ```text
-mobile (React Native CLI) ──► backend API Quarkus (:6101) ──► PostgreSQL 16 (Docker)
+mobile (React Native CLI) ──► backend API Quarkus (:6113) ──► PostgreSQL 16 (Docker)
         JWT local 8h                                 Flyway V1/V2/V3  (insectos_beneficos)
         (SecureStore/keychain)
 ```
@@ -372,15 +372,15 @@ el propio test. El resto de suites no requirió cambios.
 
 - **Causa raíz:** al desinstalar la app se limpia el SecureStore (`apiUrl`); el
   ServerCheck prueba contra `BUILT_IN_API_URL` (fallback en `mobile/src/config.ts`),
-  que aún apuntaba a la IP del HITO-001 (`10.13.18.97:6101`) → red inalcanzable.
-- **Fix:** `mobile/src/config.ts` → `API_BASE_URL = 'http://192.168.18.229:6101/api/v1'`
+  que aún apuntaba a la IP del HITO-001 (`10.13.18.97:6113`) → red inalcanzable.
+- **Fix:** `mobile/src/config.ts` → `API_BASE_URL = 'http://192.168.18.229:6113/api/v1'`
   (IP actual de la laptop del responsable, red LUZ - 5G; histórico documentado).
 - **Verificación:** `gradlew assembleRelease` BUILD SUCCESSFUL 2m42s; APK
   `app-release.apk` 2026-08-19 22:22:22, 65.546.560 bytes; firma de producción
   `CN=InsectosBeneficos, O=VanguardFresh` (SHA-256 `356e...`).
 - **Para el usuario:** en el ServerCheck del celular debe presionar
   **"Restablecer"** (vuelve al fallback corregido) o escribir manualmente
-  `http://192.168.18.229:6101/api/v1` y **"Guardar y probar"**. Alternativa: si la
+  `http://192.168.18.229:6113/api/v1` y **"Guardar y probar"**. Alternativa: si la
   laptop cambia de IP (DHCP), configurarla manualmente en Settings.
 
 ---
@@ -404,9 +404,9 @@ permanece **untracked** (sin stage por el developer; la incorporará el commit
 | 3 | ServerCheck prueba endpoint público con timeout 5s | `ServerCheckScreen.tsx:51` `api.get('/auth/roles', {timeout: 5000, baseURL: url})` — baseURL override por request |
 | 4 | "Guardar y probar" persiste ANTES de probar | `ServerCheckScreen.tsx:76-84` `handleSaveAndProbe`: `setApiUrl(apiUrl)` antes de `probe()` |
 | 5 | `usesCleartextTraffic="true"` + INTERNET | `mobile/android/app/src/main/AndroidManifest.xml` (INTERNET + cleartext + networkSecurityConfig) |
-| 6 | Backend en `0.0.0.0`, puerto mapeado y abierto | `backend/src/main/resources/application.properties` (`quarkus.http.host=0.0.0.0`, puerto 6101, CORS) |
-| 7 | URL termina con el base path real | `mobile/src/config.ts` `API_BASE_URL = 'http://192.168.18.229:6101/api/v1'` + `ApiClient.ts:29` `BUILT_IN_API_URL = normalizeApiUrl(...)` |
-| 8 | Metro (8081, JS) ≠ API (6101, JSON) | G1 `start:lan`/`reverse` (Metro LAN) y URL API independiente en ServerCheck/Settings |
+| 6 | Backend en `0.0.0.0`, puerto mapeado y abierto | `backend/src/main/resources/application.properties` (`quarkus.http.host=0.0.0.0`, puerto 6113, CORS) |
+| 7 | URL termina con el base path real | `mobile/src/config.ts` `API_BASE_URL = 'http://192.168.18.229:6113/api/v1'` + `ApiClient.ts:29` `BUILT_IN_API_URL = normalizeApiUrl(...)` |
+| 8 | Metro (8081, JS) ≠ API (6113, JSON) | G1 `start:lan`/`reverse` (Metro LAN) y URL API independiente en ServerCheck/Settings |
 | 9 | Navegador abre pero app no → cleartext/interceptor | Verificado en `AndroidManifest.xml` (cleartext OK) + interceptor de request (URL por request) |
 | 10 | Diagnóstico con `ipconfig` + `curl` antes de la app | Verificación ejecutada (§32.3): curl a la IP LAN; backend verificado por el Orchestrator (200) |
 
@@ -425,7 +425,7 @@ permanece **untracked** (sin stage por el developer; la incorporará el commit
 | 5 | `npm run lint -- --no-fix` | PASS (exit 0) |
 | 5 | `npx tsc --noEmit` | PASS (exit 0) |
 | 5 | `npm test -- --runInBand --forceExit` | PASS — **7 suites / 27 tests** |
-| 6 | `curl http://192.168.18.229:6101/api/v1/auth/roles` | **timeout (código 28 / HTTP 000)** en mi ejecución: el backend no estaba corriendo en ese momento (el Orchestrator lo verificó con 200 antes de delegar; fallo ambiental, no del delta — Ley 5) |
+| 6 | `curl http://192.168.18.229:6113/api/v1/auth/roles` | **timeout (código 28 / HTTP 000)** en mi ejecución: el backend no estaba corriendo en ese momento (el Orchestrator lo verificó con 200 antes de delegar; fallo ambiental, no del delta — Ley 5) |
 | 7 | Grep confirmación | `ServerCheckScreen.tsx:131,134` (label/accessibilityLabel "Reintentar"); `package.json:7,8,11,13` (4 scripts) |
 | 8 | `git status` (final) | modificados: `mobile/package.json`, `mobile/src/screens/ServerCheckScreen.tsx` + docs (sin commit) |
 
@@ -448,40 +448,40 @@ permanece **untracked** (sin stage por el developer; la incorporará el commit
 
 - **Problema del usuario:** la laptop cambia de IP según la red (hoy
   `10.13.18.93` en red `10.13.18.x`; `192.168.18.229` en `LUZ-5G`). El fallback
-  estático `mobile/src/config.ts` (`192.168.18.229:6101`) no cubre la red
+  estático `mobile/src/config.ts` (`192.168.18.229:6113`) no cubre la red
   `10.13.18.x` y el usuario no debería digitar la URL completa cada vez.
 - **Solución (mínimo diff — Ley 4):** el input de URL ya es runtime (Keychain,
   HITO-002) y ahora **acepta solo la IP**: se mejoró `normalizeApiUrl`
-  (`mobile/src/services/ApiClient.ts`) para autocompletar esquema, puerto `:6101`
+  (`mobile/src/services/ApiClient.ts`) para autocompletar esquema, puerto `:6113`
   y base path `/api/v1`. Se añadió guía UX (placeholder + texto de ayuda) en
   ServerCheck y Settings; los flujos existentes (`handleSaveAndProbe` y
   `handleReset` vía `BUILT_IN_API_URL`) ya aplicaban `normalizeApiUrl`, solo se
   re-verificó la **idempotencia** (ver abajo).
 - **Reglas de normalización (en orden):** (a) trim + quita barras finales;
   (b) sin esquema → antepone `http://` (https conservado); (c) sin puerto
-  explícito en host[:puerto] → añade `:6101`; (d) sin `/api/v1` → lo añade al
+  explícito en host[:puerto] → añade `:6113`; (d) sin `/api/v1` → lo añade al
   final; (e) URLs ya completas no se modifican (idempotente, compat Keychain).
 - **Ejemplos entrada → salida (casos de test en `mobile/__tests__/ApiClient.test.ts`):**
 
   | Entrada | Salida |
   |---|---|
-  | `10.13.18.93` | `http://10.13.18.93:6101/api/v1` |
-  | `192.168.1.10` | `http://192.168.1.10:6101/api/v1` |
-  | `192.168.1.10/` | `http://192.168.1.10:6101/api/v1` |
-  | `localhost` | `http://localhost:6101/api/v1` |
+  | `10.13.18.93` | `http://10.13.18.93:6113/api/v1` |
+  | `192.168.1.10` | `http://192.168.1.10:6113/api/v1` |
+  | `192.168.1.10/` | `http://192.168.1.10:6113/api/v1` |
+  | `localhost` | `http://localhost:6113/api/v1` |
   | `http://miservidor:8080/api/v1` | sin cambios |
   | `http://miservidor:8080` | `http://miservidor:8080/api/v1` |
-  | `http://10.13.18.93:6101/api/v1` | sin cambios (idempotente) |
+  | `http://10.13.18.93:6113/api/v1` | sin cambios (idempotente) |
   | `''` | `''` (comportamiento actual) |
 
   **Idempotencia verificada:** `BUILT_IN_API_URL` se calcula a nivel de módulo
   con `normalizeApiUrl(API_BASE_URL)` (`ApiClient.ts:29`); con el nuevo código
-  `http://192.168.18.229:6101/api/v1` ya tiene puerto y `/api/v1` → sale **sin
-  cambios** (cubierto por el caso `http://10.13.18.93:6101/api/v1`).
+  `http://192.168.18.229:6113/api/v1` ya tiene puerto y `/api/v1` → sale **sin
+  cambios** (cubierto por el caso `http://10.13.18.93:6113/api/v1`).
 - **Estado del entorno dev (2026-08-20, verificado — Ley 5):** backend Quarkus
-  en `0.0.0.0:6101` (PID `26076`, `Get-NetTCPConnection -LocalPort 6101`);
-  firewall Windows regla **"Insectos Backend 6101" → Allow/Any**; adb reverse
-  (`adb reverse --list`) `tcp:6101 tcp:6101` + `tcp:8081 tcp:8081`; celular
+  en `0.0.0.0:6113` (PID `26076`, `Get-NetTCPConnection -LocalPort 6113`);
+  firewall Windows regla **"Insectos Backend 6113" → Allow/Any**; adb reverse
+  (`adb reverse --list`) `tcp:6113 tcp:6113` + `tcp:8081 tcp:8081`; celular
   conectado por **WiFi depuración** (`adb-85ijey5tdax8ob5p-NMIkJB...
   ._adb-tls-connect._tcp`); IP Wi-Fi actual de la laptop `10.13.18.93`.
 - **Archivos tocados (solo alcance):** `mobile/src/services/ApiClient.ts`
@@ -674,7 +674,7 @@ programaciones de julio/agosto).
 
 ## 33.4 Estado del artefacto y pendientes
 
-- **Estado backend:** JAR recompilado y backend **corriendo en puerto 6101**.
+- **Estado backend:** JAR recompilado y backend **corriendo en puerto 6113**.
 - **Estado mobile:** cambios en disco; **hot reload** (Metro 8081) los refleja en
   el dispositivo sin reconstruir APK (no se agregó módulo nativo nuevo).
 - **Pendiente de auditoría:** el delta (2 archivos backend modificados + 1 DTO
@@ -711,7 +711,7 @@ en HITO-002, id H7; no se amplía aquí).
 |---|---|
 | `.\mvnw.cmd clean package` (backend) | **BUILD SUCCESS** — Tests run: 39 (13 Auth + 7 Programación + 19 Usuarios), Failures: 0, Errors: 0 — jar reconstruido |
 | `.\mvnw.cmd test` (backend) | **BUILD SUCCESS** — Tests run: 39, Failures: 0, Errors: 0 |
-| Live backend (puerto 6101, jar reconstruido) | `GET /especies` 200 · `GET /programaciones?anio=2026&mes=8` 200 (sin token) · `POST /programaciones` sin token **401** · `PUT /programaciones/1` sin token **401** · `POST /programaciones/1/publicar` sin token **401** (con `Content-Type: application/json`) |
+| Live backend (puerto 6113, jar reconstruido) | `GET /especies` 200 · `GET /programaciones?anio=2026&mes=8` 200 (sin token) · `POST /programaciones` sin token **401** · `PUT /programaciones/1` sin token **401** · `POST /programaciones/1/publicar` sin token **401** (con `Content-Type: application/json`) |
 | `npm run lint` (mobile) | **EXIT 0** |
 | `npx tsc --noEmit` (mobile) | **EXIT 0** |
 | `npx jest __tests__/ProgramacionScreen.test.tsx __tests__/ProgramacionEdicionScreen.test.tsx __tests__/ApiClient.test.ts --runInBand` | **PASS — 3 suites / 29 tests** |
@@ -750,7 +750,7 @@ en HITO-002, id H7; no se amplía aquí).
   la laptop). **Alternativa fija:** instalar el APK **release** (`assembleRelease`) que trae el bundle
   embebido (`assets/index.android.bundle`) y no depende de Metro — recomendado para prueba de campo.
 
-## 34.2 Causa raíz #2 — Backend (6101) bloqueado para la red Wi-Fi
+## 34.2 Causa raíz #2 — Backend (6113) bloqueado para la red Wi-Fi
 
 Evidencia (tests `toybox nc -w 4` desde el celular contra `192.168.18.229:puerto`):
 
@@ -758,14 +758,14 @@ Evidencia (tests `toybox nc -w 4` desde el celular contra `192.168.18.229:puerto
 |---|---|---|
 | 8081 | Metro (Node) | **OPEN** |
 | 8082 | Backend Apilamiento (para comparar) | **OPEN** |
-| 6101 | Backend Insectos (Java) | **CLOSED** (timeout) |
+| 6113 | Backend Insectos (Java) | **CLOSED** (timeout) |
 
-- El backend de Insectos responde **200** en `localhost:6101` y escucha en `0.0.0.0:6101` (IPv4+IPv6),
+- El backend de Insectos responde **200** en `localhost:6113` y escucha en `0.0.0.0:6113` (IPv4+IPv6),
   y `ping` desde el celular a `192.168.18.229` da 0% pérdida → el bloqueo es de **acceso a puerto
   entrante**, no de la IP ni del proceso.
 - La diferencia con Apilamiento (que sí funciona) es que su puerto `8082` tiene **reglas de firewall
   explícitas y persistentes**: `Apilamiento Backend 8082 LAN` y `Apilamiento Docker Backend 8082 Allow`
-  (Allow / Inbound / perfil `Dominio,Privada,Pública` / **`RemoteIP 192.168.18.0/24`**). El 6101 no
+  (Allow / Inbound / perfil `Dominio,Privada,Pública` / **`RemoteIP 192.168.18.0/24`**). El 6113 no
   tenía regla equivalente.
 - Agravante: la red Wi-Fi **"LUZ - 5G" estaba en perfil `Public`**, donde Windows bloquea todo tráfico
   entrante por defecto (Metro y Apilamiento pasaban por excepciones ya aprobadas, Insectos no).
@@ -773,8 +773,8 @@ Evidencia (tests `toybox nc -w 4` desde el celular contra `192.168.18.229:puerto
 ## 34.3 Correcciones aplicadas (para que no vuelva a pasar)
 
 1. **Reglas de firewall persistentes** (mismo shape que Apilamiento, con `remoteip=192.168.18.0/24`):
-   - `Insectos Backend 6101 LAN` (programa `java.exe` del backend) — Allow / Inbound / Any / TCP 6101.
-   - `Insectos Backend 6101 Puerto LAN` (por puerto, a prueba de cambio de exe) — Allow / Inbound / Any.
+   - `Insectos Backend 6113 LAN` (programa `java.exe` del backend) — Allow / Inbound / Any / TCP 6113.
+   - `Insectos Backend 6113 Puerto LAN` (por puerto, a prueba de cambio de exe) — Allow / Inbound / Any.
    - El formato con `remoteip` de subred LAN es el que **persiste** (a diferencia de un `remoteip=any`,
      que era revertido por la política de Sophos Endpoint Defense / EDR).
 2. **Perfil de red:** `Set-NetConnectionProfile -Name "LUZ - 5G" -NetworkCategory Private`
@@ -785,7 +785,7 @@ Evidencia (tests `toybox nc -w 4` desde el celular contra `192.168.18.229:puerto
 
 | Chequeo | Resultado |
 |---|---|
-| Desde el celular, `toybox nc -w 4 192.168.18.229 6101` | **OPEN** |
+| Desde el celular, `toybox nc -w 4 192.168.18.229 6113` | **OPEN** |
 | `toybox nc -w 4 192.168.18.229 8081` | **OPEN** |
 | App en el celular (debug + Metro) tras `adb reverse` | Carga la pantalla **ServerCheck "Verificando servidor"** (ya NO el RedBox) |
 | ServerCheck con la IP `192.168.18.229` | Pasa del estado `checking` a `ready` → **"Iniciar Sesión"** (paso 1 de 3: Super Admin / Admin / Usuario) |
@@ -997,7 +997,7 @@ Evidencia (tests `toybox nc -w 4` desde el celular contra `192.168.18.229:puerto
 | 2 | `npx tsc --noEmit` (mobile) | exit 0 |
 | 3 | `npx jest --runInBand` (mobile) | **77 tests PASS** (17 suites) |
 | 4 | `npm run lint` (mobile) | PASS |
-| 5 | Backend dev (:6101) | V1-V9 aplicadas; endpoints de catálogos responden 200 con datos reales |
+| 5 | Backend dev (:6113) | V1-V9 aplicadas; endpoints de catálogos responden 200 con datos reales |
 
 > **Nota flakiness:** `npm test` en paralelo (sin `--runInBand`) puede fallar intermitentemente por
 > contención de workers (pre-existente). Se valida con `--runInBand`.
@@ -1056,7 +1056,7 @@ Evidencia (tests `toybox nc -w 4` desde el celular contra `192.168.18.229:puerto
 |---|---|---|
 | 1 | `.\mvnw.cmd test -Dtest=RequerimientoResourceTest` | **Tests run: 6, Failures: 0** |
 | 2 | `.\mvnw.cmd package` | **BUILD SUCCESS — 53 tests** (Auth 13 + CatalogoReq 4 + Catalogo 4 + Programación 7 + Requerimientos 6 + Usuario 19) |
-| 3 | Backend dev (:6101) | **V10 aplicada**; tabla `requerimientos` creada; `GET /api/v1/requerimientos` → 401 (RBAC activo) |
+| 3 | Backend dev (:6113) | **V10 aplicada**; tabla `requerimientos` creada; `GET /api/v1/requerimientos` → 401 (RBAC activo) |
 
 **Incidente de infraestructura resuelto (documentado, Ley 5):** durante el arranque del backend dev
 se detectó (a) Docker Desktop detenido (contenedor PostgreSQL caído → se arrancó Docker Desktop),
@@ -2318,14 +2318,14 @@ retornaba 500 en todos los endpoints.
 
 | Paso | Observación |
 |---|---|
-| 1 | `curl localhost:6101/api/v1/auth/roles` → 500 (error interno del servidor) |
-| 2 | `curl localhost:6101/api/v1/programaciones?anio=2026&mes=9` → 500 |
-| 3 | `curl localhost:6101/api/v1/fundos` → 500 |
+| 1 | `curl localhost:6113/api/v1/auth/roles` → 500 (error interno del servidor) |
+| 2 | `curl localhost:6113/api/v1/programaciones?anio=2026&mes=9` → 500 |
+| 3 | `curl localhost:6113/api/v1/fundos` → 500 |
 | 4 | Logs Quarkus: `FlywayExecutor` → `Migrating schema to version 14` → `PSQLException: relation "programacion_detalles" does not exist` |
 | 5 | Se confirma: V14 no estaba en `flyway_schema_history` (falló antes de registrarse) |
 
-**Nota adicional:** Quarkus dev mode en Windows ignora `quarkus.http.port=6101` de
-`application.properties`. El puerto se fuerza con `-Dquarkus.http.port=6101` en la línea
+**Nota adicional:** Quarkus dev mode en Windows ignora `quarkus.http.port=6113` de
+`application.properties`. El puerto se fuerza con `-Dquarkus.http.port=6113` en la línea
 de comandos. Sin esto, arranca en el puerto default 8080.
 
 ## 60.3 Corrección
@@ -2339,13 +2339,13 @@ de comandos. Sin esto, arranca en el puerto default 8080.
 ### Backend
 | Comando | Resultado |
 |---|---|
-| `curl localhost:6101/api/v1/auth/roles` | ✅ 200 — `[Super Admin, Admin, Usuario]` |
-| `curl localhost:6101/api/v1/programaciones?anio=2026&mes=9` | ✅ 200 — 8 detalles PUBLICADO |
-| `curl localhost:6101/api/v1/fundos` | ✅ 200 — 6 fundos |
-| `curl localhost:6101/api/v1/variedades` | ✅ 200 — 11 variedades |
-| `curl localhost:6101/api/v1/etapas-fenologicas` | ✅ 200 — 7 etapas |
-| `curl localhost:6101/api/v1/requerimientos` | ✅ 401 (auth requerida, correcto) |
-| `curl localhost:6101/api/v1/programaciones/1/stock?fecha=2026-09-03` | ✅ 401 (auth requerida, correcto) |
+| `curl localhost:6113/api/v1/auth/roles` | ✅ 200 — `[Super Admin, Admin, Usuario]` |
+| `curl localhost:6113/api/v1/programaciones?anio=2026&mes=9` | ✅ 200 — 8 detalles PUBLICADO |
+| `curl localhost:6113/api/v1/fundos` | ✅ 200 — 6 fundos |
+| `curl localhost:6113/api/v1/variedades` | ✅ 200 — 11 variedades |
+| `curl localhost:6113/api/v1/etapas-fenologicas` | ✅ 200 — 7 etapas |
+| `curl localhost:6113/api/v1/requerimientos` | ✅ 401 (auth requerida, correcto) |
+| `curl localhost:6113/api/v1/programaciones/1/stock?fecha=2026-09-03` | ✅ 401 (auth requerida, correcto) |
 | Flyway log | ✅ `Successfully applied 1 migration to schema "public", now at version v14` |
 
 ### Flyway schema history (V14 registrada)
@@ -2451,7 +2451,7 @@ de arquitectura, workflow, sequence, dataflow y lifecycle como HTML interactivo 
 |---|---|
 | Instalación global (`~/.agents/skills/archify/`) | Disponible en todos los proyectos del orchestrator |
 | Permisos solo para orchestrator | Control centralizado de generación de diagramas |
-| Puerto 6101 confirmado | Backend Quarkus en :6101, mobile config.ts y ApiClient.ts ya lo definen |
+| Puerto 6113 confirmado | Backend Quarkus en :6113, mobile config.ts y ApiClient.ts ya lo definen |
 
 ## 62.3 Archivos
 
@@ -2470,9 +2470,9 @@ de arquitectura, workflow, sequence, dataflow y lifecycle como HTML interactivo 
 
 | Servicio | URL | Fuente |
 |---|---|---|
-| Backend Quarkus | `:6101` | `application.properties:8` |
-| Mobile fallback | `http://localhost:6101/api/v1` | `config.ts:20` |
-| Mobile normalización | Fuerza `:6101` siempre | `ApiClient.ts:53-55` |
+| Backend Quarkus | `:6113` | `application.properties:8` |
+| Mobile fallback | `http://localhost:6113/api/v1` | `config.ts:20` |
+| Mobile normalización | Fuerza `:6113` siempre | `ApiClient.ts:53-55` |
 | PostgreSQL | `:5432` | `application.properties:13` |
 
 ## 62.5 Verificación
@@ -2563,11 +2563,11 @@ docker-compose proyecto `repo_registro_insectos_beneficos` con 3 services:
 
 - `postgres` (postgres:16, healthcheck, volumen `pg_data`).
 - `backend` (imagen `repo_registro_insectos_beneficos-backend`, build multi-stage
-  `backend/Dockerfile`, `TZ: America/Lima`, puerto 6101, volumen `uploads_data` → `/app/uploads`).
-- `nginx` (nginx:1.27-alpine, `nginx/nginx.conf` → proxy `:80` → `http://backend:6101`, puerto 8080).
+  `backend/Dockerfile`, `TZ: America/Lima`, puerto 6113, volumen `uploads_data` → `/app/uploads`).
+- `nginx` (nginx:1.27-alpine, `nginx/nginx.conf` → proxy `:80` → `http://backend:6113`, puerto 8080).
 
 El backend corre desde BD limpia aplicando Flyway V1-V17 al primer arranque. Verificado:
-`/q/openapi` 200 directo (`:6101`) y vía nginx (`:8080`), seeds aplicados (fundos 6, variedades 11,
+`/q/openapi` 200 directo (`:6113`) y vía nginx (`:8080`), seeds aplicados (fundos 6, variedades 11,
 lotes 191, roles 3, super admin 1).
 
 ### 65.2 TZ fix (America/Lima)
@@ -2609,7 +2609,7 @@ HITO-015) que rompía el build limpio; corregido a `pe.sistema.insectosbeneficos
 | Comando | Resultado |
 |---|---|
 | `docker compose up -d --build` | ✅ 3 contenedores up |
-| `curl :8080/q/openapi` / `:6101/q/openapi` | ✅ 200 vía nginx y directo |
+| `curl :8080/q/openapi` / `:6113/q/openapi` | ✅ 200 vía nginx y directo |
 | `mvn test -Dtest=ProgramacionResourceTest` | ✅ PASS |
 | `npm run lint` | ✅ PASS |
 | `npm test -- --runInBand` | ✅ PASS |
@@ -3491,3 +3491,57 @@ se configuró el mailer directo contra `10.13.10.10:25` y se alineó la versión
 | Backend env vars | ✅ `MAILER_HOST=10.13.10.10`, `PORT=25`, `START_TLS=DISABLED` |
 | Backend start | ✅ `insectos-beneficos-backend started in 6.771s` |
 | Docker compose config | ✅ válido |
+
+---
+
+# 81. v1.14.4 — Icono de notificación personalizado Vanguard (2026-09-21)
+
+## 81.1 Resumen
+
+Las notificaciones push se muestran en la barra de notificaciones Android con un
+icono pequeño (small icon) personalizado: el isotipo Vanguard (silueta blanca sobre
+fondo transparente). Anteriormente el sistema usaba `ic_launcher` (icono a color
+cuadrado) que se veía como un bloque sólido y no era característico.
+
+En Android el icono pequeño de notificaciones es siempre una silueta monocroma
+(el sistema lo tiñe de blanco). Se cubren las dos rutas de renderizado:
+
+1. **Foreground (app abierta)**: `notifee.displayNotification()` con `smallIcon: 'ic_stat_vanguard'`.
+2. **Background/killed (FCM SDK)**: `<meta-data android:name="com.google.firebase.messaging.default_notification_icon">` en AndroidManifest.xml.
+
+*(iOS no aplica: usa el icono de la app en la barra, no tiene small icon.)*
+
+## 81.2 Archivos modificados / creados
+
+| Archivo | Cambio |
+|---|---|
+| `mobile/android/app/src/main/res/drawable-mdpi/ic_stat_vanguard.png` | **Creado** — 24×24, silueta blanca centrada |
+| `mobile/android/app/src/main/res/drawable-hdpi/ic_stat_vanguard.png` | **Creado** — 36×36 |
+| `mobile/android/app/src/main/res/drawable-xhdpi/ic_stat_vanguard.png` | **Creado** — 48×48 |
+| `mobile/android/app/src/main/res/drawable-xxhdpi/ic_stat_vanguard.png` | **Creado** — 72×72 |
+| `mobile/android/app/src/main/res/drawable-xxxhdpi/ic_stat_vanguard.png` | **Creado** — 96×96 |
+| `mobile/android/app/src/main/AndroidManifest.xml` | Agregado `meta-data` para `default_notification_icon` + `default_notification_channel_id` |
+| `mobile/src/services/NotificationService.ts` | `smallIcon: 'ic_stat_vanguard'` en `notifee.displayNotification()` |
+| `mobile/versionHistory.js` | Entrada v1.14.4 |
+| `mobile/package.json` | `"version": "1.14.4"` |
+| `mobile/android/app/build.gradle` | `versionName "1.14.4"` / `versionCode 21` |
+| `mobile/src/constants/appVersion.ts` | `APP_VERSION = '1.14.4'` |
+| `docs_implementacion/_sdd/04_implementacion.md` | Sección 81 |
+
+## 81.3 Asset
+
+Fuente: `docs_implementacion/_img/Isotipo - Vanguard Perú - Blanco.png`
+(801×551, Format32bppArgb, silueta blanca pura sobre fondo transparente).
+
+Procesamiento: recorte al bbox de contenido (777×507, ratio 1.533), escalado
+proporcional al 80% del canvas cuadrado de cada density bucket, centrado con
+padding transparente. Sin distorsión.
+
+## 81.4 Verificación
+
+| Comando | Resultado |
+|---|---|
+| `npm run lint` | ✅ 0 errores, 11 warnings pre-existentes (token.ts bitwise) |
+| `npm test -- --runInBand` | ⚠️ 68 pass / 3 fail (pre-existente: mock ESM de @react-native-firebase/messaging) |
+| AndroidManifest merged | ✅ meta-data `default_notification_icon` → `@drawable/ic_stat_vanguard` |
+| Density buckets | ✅ 5 PNGs generados (24/36/48/72/96px) |
