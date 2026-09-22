@@ -298,6 +298,12 @@ y reportar al Orchestrator; no "arreglarlo" en silencio.
   (`AndroidManifest` meta-data `default_notification_icon`). Density buckets mdpi→xxxhdpi
   generados desde `docs_implementacion/_img/Isotipo - Vanguard Perú - Blanco.png`.
   Versión **1.14.4** / versionCode 21. Mobile: 145 tests · Backend: 102 tests (0 fallas).
+- **v1.14.5 (2026-09-21) = Permisos robustos**: pantalla de permisos con 3 estados
+  (granted/askable/blocked) y botón "Abrir ajustes" cuando bloqueado. Verificación pasiva
+  (notifee.getNotificationSettings + PermissionsAndroid.check) en RootNavigator — ya no
+  dispara diálogos al solo checar. Re-validación al volver de background (AppState → active).
+  "Continuar" bloqueado hasta que ambos permisos estén granted.
+  Versión **1.14.5** / versionCode 22. Mobile: 145 tests · Backend: 102 tests (0 fallas).
 - Los hitos se cierran con **auditoría integral PASS + verificación + `05_hito_NNN.md` + commit** coherente.
 - `versionHistory.js` es la fuente del historial visible al usuario (mobile existente); web la adoptará.
 

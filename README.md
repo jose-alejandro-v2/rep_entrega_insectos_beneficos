@@ -178,6 +178,11 @@ docs_implementacion/
   (`AndroidManifest` meta-data `default_notification_icon`). Density buckets mdpi→xxxhdpi
   generados desde el isotipo blanco transparente. Versión **1.14.4** / versionCode 21.
   Mobile: 145 tests · Backend: 102 tests (0 fallas).
+- **v1.14.5 (2026-09-21) = Permisos robustos**: pantalla de permisos con 3 estados
+  (granted/askable/blocked) y botón "Abrir ajustes" cuando bloqueado. Verificación pasiva
+  en RootNavigator (ya no dispara diálogos al solo checar). Re-validación al volver de
+  background (AppState). "Continuar" bloqueado hasta ambos permisos otorgados.
+  Versión **1.14.5** / versionCode 22. Mobile: 145 tests · Backend: 102 tests (0 fallas).
 - **Pendientes**: frontend web (React/Vite) y CI/CD (GitHub Actions).
   Ver [`docs_implementacion/_sdd/`](docs_implementacion/_sdd/).
 

@@ -32,7 +32,7 @@ import notifee, {
 import {Platform} from 'react-native';
 import {api} from './ApiClient';
 
-const CHANNEL_GENERAL = 'insectos_beneficos_general';
+export const CHANNEL_GENERAL = 'insectos_beneficos_general';
 const CHANNEL_SUCCESS = 'insectos_beneficos_success';
 
 class NotificationServiceClass {

@@ -10,8 +10,8 @@
 | Documento | 04_IMPLEMENTACION — Estado e historial de implementación |
 | Proyecto | Sistema de Control de Entrega de Insectos Benéficos |
 | Tipo Documento | SDD (historial de implementación) |
-| Estado | v1.14.4: icono de notificación personalizado Vanguard en barra de notificaciones Android; 102 tests BE, 145 tests MO |
-| Versión | 1.14.4 / versionCode 21 |
+| Estado | v1.14.5: permisos robustos (3 estados granted/askable/blocked) + re-verificación en foreground + verificación pasiva; 102 tests BE, 145 tests MO |
+| Versión | 1.14.5 / versionCode 22 |
 | Fecha | 2026-09-21 |
 | Responsable | Orchestrator / Developer |
 | Repositorio | C:\repos\rep_entrega_insectos_beneficos |
@@ -3545,3 +3545,52 @@ padding transparente. Sin distorsión.
 | `npm test -- --runInBand` | ⚠️ 68 pass / 3 fail (pre-existente: mock ESM de @react-native-firebase/messaging) |
 | AndroidManifest merged | ✅ meta-data `default_notification_icon` → `@drawable/ic_stat_vanguard` |
 | Density buckets | ✅ 5 PNGs generados (24/36/48/72/96px) |
+
+---
+
+# 82. v1.14.5 — Permisos robustos: 3 estados + re-verificación en foreground (2026-09-21)
+
+## 82.1 Resumen
+
+Los permisos de cámara y notificaciones ahora se verifican de forma **pasiva**
+(sin disparar diálogos) en cada inicio de sesión y al volver de background
+(AppState → active). PermissionsScreen distingue 3 estados por permiso:
+
+- **granted**: ✓ Otorgado
+- **askable**: no otorgado pero se puede pedir (botón "Otorgar")
+- **blocked**: desactivado en ajustes del sistema (botón "Abrir ajustes")
+
+El botón "Continuar" queda bloqueado hasta que ambos permisos estén granted.
+Esto evita que permisos desactivados pasan desapercibidos tras reinstalar
+o actualizar la app.
+
+**Problema que resuelve**: tras hacer update del APK, las notificaciones
+se desactivaban a nivel del sistema (toggle `POST_NOTIFICATIONS` apagado) pero
+la pantalla de permisos no se volvía a mostrar, ni ofrecía reactivarlas.
+
+**Causa raíz** (por qué pasaba): el check anterior en `RootNavigator` usaba
+`requestPermission()` (que dispara el diálogo) como si fuera un "check".
+En Android 13+ cuando el toggle está off, esto no muestra nada y retorna
+DENIED silenciosamente, pero sin guiar al usuario a reactivar.
+
+## 82.2 Archivos modificados / creados
+
+| Archivo | Cambio |
+|---|---|
+| `mobile/src/utils/permissions.ts` | **Creado** — `checkCameraPermission()`, `checkNotificationsPermission()`, `checkAllPermissions()` (verificación pasiva) |
+| `mobile/src/navigation/RootNavigator.tsx` | Usa `checkAllPermissions()` pasivo; elimina `requestPermission()` del check; agrega `AppState` listener para re-check en foreground |
+| `mobile/src/screens/PermissionsScreen.tsx` | Reescrito: 3 estados (granted/askable/blocked), "Abrir ajustes" cuando bloqueado (notifee.openNotificationSettings / Linking.openSettings), Continuar bloqueado |
+| `mobile/src/navigation/types.ts` | Params `initialCameraState`, `initialNotificationsState` en `Permisos` |
+| `mobile/src/services/NotificationService.ts` | `CHANNEL_GENERAL` exportado (reutilizable en permissions.ts) |
+| `mobile/versionHistory.js` | Entrada v1.14.5 |
+| `mobile/package.json` | `"version": "1.14.5"` |
+| `mobile/android/app/build.gradle` | `versionName "1.14.5"` / `versionCode 22` |
+| `mobile/src/constants/appVersion.ts` | `APP_VERSION = '1.14.5'` |
+| `docs_implementacion/_sdd/04_implementacion.md` | Sección 82 |
+
+## 82.3 Verificación
+
+| Comando | Resultado |
+|---|---|
+| `npx eslint src/utils/permissions.ts src/navigation/RootNavigator.tsx src/screens/PermissionsScreen.tsx src/services/NotificationService.ts src/navigation/types.ts` | ✅ 0 errores |
+| `npm test -- --runInBand` | ⚠️ Fallos pre-existentes (mock ESM de @react-native-firebase/messaging). No hay nuevos fallos introducidos |

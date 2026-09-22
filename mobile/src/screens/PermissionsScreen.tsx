@@ -6,11 +6,15 @@ import {
   TouchableOpacity,
   PermissionsAndroid,
   Platform,
+  Linking,
   Alert,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
+import notifee from '@notifee/react-native';
 import {getMessaging, requestPermission, AuthorizationStatus} from '@react-native-firebase/messaging';
 import {theme} from '../theme';
+import {checkAllPermissions, type PermissionState} from '../utils/permissions';
+import {CHANNEL_GENERAL} from '../services/NotificationService';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import type {RouteProp} from '@react-navigation/native';
 import type {RootStackParamList} from '../navigation/types';
@@ -20,67 +24,43 @@ type Props = {
   route: RouteProp<RootStackParamList, 'Permisos'>;
 };
 
-interface PermissionStatus {
-  camera: boolean;
-  notifications: boolean;
-}
-
 /**
- * PermissionsScreen — Pantalla de permisos obligatorios (HITO-018).
- * Se muestra despues del login si el usuario no ha otorgado permisos
- * de camara y notificaciones. Obligatoria para continuar.
+ * PermissionsScreen — Pantalla de permisos obligatorios (HITO-018/HITO-019).
+ * Se muestra cuando la sesion esta activa pero al menos un permiso no esta
+ * otorgado. Los 3 estados por permiso:
+ *  - granted:  otorgado (check mark verde)
+ *  - askable:  no otorgado pero se puede pedir (boton "Otorgar")
+ *  - blocked:  desactivado en ajustes del sistema (boton "Abrir ajustes")
  */
-export default function PermissionsScreen({_navigation, route}: Props) {
-  const [permissions, setPermissions] = useState<PermissionStatus>({
-    camera: false,
-    notifications: false,
-  });
-  const [loading, setLoading] = useState(true);
-  const [requesting, setRequesting] = useState(false);
+export default function PermissionsScreen({route}: Props) {
+  const [camera, setCamera] = useState<PermissionState>(
+    route.params?.initialCameraState ?? 'askable',
+  );
+  const [notifications, setNotifications] = useState<PermissionState>(
+    route.params?.initialNotificationsState ?? 'askable',
+  );
+  const [loading, setLoading] = useState(false);
 
-  const checkPermissions = useCallback(async () => {
+  const recheck = useCallback(async () => {
+    setLoading(true);
     try {
-      // Verificar camara
-      let cameraGranted = false;
-      if (Platform.OS === 'android') {
-        const result = await PermissionsAndroid.check(
-          PermissionsAndroid.PERMISSIONS.CAMERA,
-        );
-        cameraGranted = result;
-      } else {
-        cameraGranted = true; // iOS se maneja diferente
-      }
-
-      // Verificar notificaciones
-      let notificationsGranted = false;
-      try {
-        const messaging = getMessaging();
-        const authStatus = await requestPermission(messaging);
-        notificationsGranted =
-          authStatus === AuthorizationStatus.AUTHORIZED ||
-          authStatus === AuthorizationStatus.PROVISIONAL;
-      } catch {
-        notificationsGranted = false;
-      }
-
-      setPermissions({
-        camera: cameraGranted,
-        notifications: notificationsGranted,
-      });
-    } catch (error) {
-      console.error('[PermissionsScreen] Error checking permissions:', error);
+      const result = await checkAllPermissions();
+      setCamera(result.camera);
+      setNotifications(result.notifications);
+    } catch {
+      // Mantener estados actuales si falla
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    checkPermissions();
-  }, [checkPermissions]);
+    recheck();
+  }, [recheck]);
 
-  const requestCameraPermission = async () => {
+  const requestCamera = async () => {
     if (Platform.OS !== 'android') {
-      setPermissions(prev => ({...prev, camera: true}));
+      setCamera('granted');
       return;
     }
 
@@ -99,21 +79,24 @@ export default function PermissionsScreen({_navigation, route}: Props) {
       );
 
       if (result === PermissionsAndroid.RESULTS.GRANTED) {
-        setPermissions(prev => ({...prev, camera: true}));
-      } else {
+        setCamera('granted');
+      } else if (result === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) {
+        setCamera('blocked');
         Alert.alert(
-          'Permiso requerido',
-          'La camara es obligatoria para el funcionamiento de la app. ' +
-            'Puede activarla desde Configuracion > Permisos.',
+          'Permiso bloqueado',
+          'La camara esta bloqueada permanentemente. Debe activarla desde ' +
+            'Ajustes del sistema > Aplicaciones > Insectos Beneficos > Permisos > Camara.',
           [{text: 'Entendido'}],
         );
+      } else {
+        setCamera('askable');
       }
     } catch (error) {
       console.error('[PermissionsScreen] Error requesting camera:', error);
     }
   };
 
-  const requestNotificationPermission = async () => {
+  const requestNotifications = async () => {
     try {
       const messaging = getMessaging();
       const authStatus = await requestPermission(messaging, {
@@ -126,13 +109,14 @@ export default function PermissionsScreen({_navigation, route}: Props) {
         authStatus === AuthorizationStatus.AUTHORIZED ||
         authStatus === AuthorizationStatus.PROVISIONAL
       ) {
-        setPermissions(prev => ({...prev, notifications: true}));
+        setNotifications('granted');
       } else {
+        // DENIED en Android 13+ = toggle apagado → blocked
+        setNotifications('blocked');
         Alert.alert(
-          'Permiso requerido',
-          'Las notificaciones son obligatorias para recibir alertas de ' +
-            'programaciones, requerimientos y cambios de estado. ' +
-            'Puede activarlas desde Configuracion > Permisos.',
+          'Permiso bloqueado',
+          'Las notificaciones estan desactivadas. Debe activarlas desde ' +
+            'Ajustes del sistema > Aplicaciones > Insectos Beneficos > Notificaciones.',
           [{text: 'Entendido'}],
         );
       }
@@ -141,16 +125,23 @@ export default function PermissionsScreen({_navigation, route}: Props) {
     }
   };
 
-  const requestAllPermissions = async () => {
-    setRequesting(true);
-    await Promise.all([
-      requestCameraPermission(),
-      requestNotificationPermission(),
-    ]);
-    setRequesting(false);
+  const openCameraSettings = () => {
+    Linking.openSettings();
   };
 
-  const canProceed = permissions.camera && permissions.notifications;
+  const openNotificationSettings = async () => {
+    try {
+      await notifee.openNotificationSettings(CHANNEL_GENERAL);
+    } catch {
+      Linking.openSettings();
+    }
+  };
+
+  const requestAllPermissions = async () => {
+    await Promise.all([requestCamera(), requestNotifications()]);
+  };
+
+  const canProceed = camera === 'granted' && notifications === 'granted';
 
   const handleContinue = () => {
     if (canProceed) {
@@ -158,15 +149,25 @@ export default function PermissionsScreen({_navigation, route}: Props) {
     }
   };
 
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.root}>
-        <View style={styles.center}>
-          <Text style={styles.loadingText}>Verificando permisos...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
+  const renderStatus = (state: PermissionState, onRequest: () => void, onOpenSettings: () => void) => {
+    switch (state) {
+      case 'granted':
+        return <Text style={styles.granted}>✓ Otorgado</Text>;
+      case 'blocked':
+        return (
+          <TouchableOpacity style={styles.blockedButton} onPress={onOpenSettings}>
+            <Text style={styles.blockedButtonText}>Abrir ajustes</Text>
+          </TouchableOpacity>
+        );
+      case 'askable':
+      default:
+        return (
+          <TouchableOpacity style={styles.grantButton} onPress={onRequest}>
+            <Text style={styles.grantButtonText}>Otorgar</Text>
+          </TouchableOpacity>
+        );
+    }
+  };
 
   return (
     <SafeAreaView style={styles.root}>
@@ -193,15 +194,7 @@ export default function PermissionsScreen({_navigation, route}: Props) {
               </View>
             </View>
             <View style={styles.permissionStatus}>
-              {permissions.camera ? (
-                <Text style={styles.granted}>✓ Otorgado</Text>
-              ) : (
-                <TouchableOpacity
-                  style={styles.grantButton}
-                  onPress={requestCameraPermission}>
-                  <Text style={styles.grantButtonText}>Otorgar</Text>
-                </TouchableOpacity>
-              )}
+              {renderStatus(camera, requestCamera, openCameraSettings)}
             </View>
           </View>
 
@@ -218,27 +211,19 @@ export default function PermissionsScreen({_navigation, route}: Props) {
               </View>
             </View>
             <View style={styles.permissionStatus}>
-              {permissions.notifications ? (
-                <Text style={styles.granted}>✓ Otorgado</Text>
-              ) : (
-                <TouchableOpacity
-                  style={styles.grantButton}
-                  onPress={requestNotificationPermission}>
-                  <Text style={styles.grantButtonText}>Otorgar</Text>
-                </TouchableOpacity>
-              )}
+              {renderStatus(notifications, requestNotifications, openNotificationSettings)}
             </View>
           </View>
         </View>
 
         <View style={styles.actions}>
-          {!canProceed && (
+          {(camera !== 'granted' || notifications !== 'granted') && (
             <TouchableOpacity
-              style={[styles.requestAllButton, requesting && styles.disabled]}
+              style={[styles.requestAllButton, loading && styles.disabled]}
               onPress={requestAllPermissions}
-              disabled={requesting}>
+              disabled={loading}>
               <Text style={styles.requestAllText}>
-                {requesting ? 'Solicitando...' : 'Otorgar todos los permisos'}
+                {loading ? 'Verificando...' : 'Otorgar todos los permisos'}
               </Text>
             </TouchableOpacity>
           )}
@@ -266,15 +251,6 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 24,
     justifyContent: 'center',
-  },
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    fontSize: 16,
-    color: theme.colors.text.secondary,
   },
   header: {
     marginBottom: 32,
@@ -339,6 +315,17 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   grantButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  blockedButton: {
+    backgroundColor: '#FF9800',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  blockedButtonText: {
     fontSize: 14,
     fontWeight: '600',
     color: '#FFFFFF',

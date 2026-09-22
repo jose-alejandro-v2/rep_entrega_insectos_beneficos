@@ -6,6 +6,16 @@
 
 const versionHistory = [
   {
+    version: '1.14.5',
+    fecha: '2026-09-21',
+    cambios: [
+      'Permisos robustos: la pantalla de permisos ahora distingue 3 estados (otorgado, askable, bloqueado) y ofrece "Abrir ajustes" cuando el permiso está desactivado en el sistema.',
+      'Re-verificación en foreground: los permisos se re-validan al volver de background (AppState) y no solo al hacer login, evitando que permisos desactivados pasen desapercibidos.',
+      'Verificación pasiva: RootNavigator ya no usa requestPermission() como check; ahora usa notifee.getNotificationSettings() + PermissionsAndroid.check() para un diagnóstico fiable sin disparar diálogos.',
+      'Bloqueo total: "Continuar" no se habilita hasta que cámara y notificaciones estén otorgadas, garantizando que los permisos requeridos no se escapen.',
+    ],
+  },
+  {
     version: '1.14.4',
     fecha: '2026-09-21',
     cambios: [

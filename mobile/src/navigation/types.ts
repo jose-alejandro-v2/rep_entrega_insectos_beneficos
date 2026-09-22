@@ -11,7 +11,12 @@ export type RootStackParamList = {
   Login: undefined;
   ConfigurarServidor: undefined;
   CambiarPassword: undefined;
-  Permisos: {onPermissionsGranted?: () => void; usuarioId?: number};
+  Permisos: {
+    onPermissionsGranted?: () => void;
+    usuarioId?: number;
+    initialCameraState?: 'granted' | 'askable' | 'blocked';
+    initialNotificationsState?: 'granted' | 'askable' | 'blocked';
+  };
   Home: undefined;
   Catalogos: undefined;
   Perfil: undefined;

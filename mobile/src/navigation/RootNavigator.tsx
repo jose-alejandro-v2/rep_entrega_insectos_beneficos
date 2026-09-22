@@ -1,5 +1,5 @@
-import React, {useState, useEffect} from 'react';
-import {ActivityIndicator, Platform, StyleSheet, View} from 'react-native';
+import React, {useState, useEffect, useCallback} from 'react';
+import {ActivityIndicator, AppState, StyleSheet, View} from 'react-native';
 import {NavigationContainer} from '@react-navigation/native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {useAuth} from '../context/AuthContext';
@@ -30,43 +30,11 @@ import PermissionsScreen from '../screens/PermissionsScreen';
 import NotificationService from '../services/NotificationService';
 import {theme} from '../theme';
 import type {RootStackParamList} from './types';
-import {PermissionsAndroid} from 'react-native';
-import {getMessaging, requestPermission, AuthorizationStatus} from '@react-native-firebase/messaging';
+import {checkAllPermissions} from '../utils/permissions';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-/**
- * Verifica si los permisos obligatorios (camara + notificaciones) estan otorgados.
- */
-async function checkPermissionsGranted(): Promise<boolean> {
-  try {
-    // Camara
-    let cameraOk = false;
-    if (Platform.OS === 'android') {
-      cameraOk = await PermissionsAndroid.check(
-        PermissionsAndroid.PERMISSIONS.CAMERA,
-      );
-    } else {
-      cameraOk = true;
-    }
-
-    // Notificaciones
-    let notifOk = false;
-    try {
-      const messaging = getMessaging();
-      const authStatus = await requestPermission(messaging);
-      notifOk =
-        authStatus === AuthorizationStatus.AUTHORIZED ||
-        authStatus === AuthorizationStatus.PROVISIONAL;
-    } catch {
-      notifOk = false;
-    }
-
-    return cameraOk && notifOk;
-  } catch {
-    return false;
-  }
-}
+type PermStatus = 'granted' | 'askable' | 'blocked';
 
 /**
  * Navegacion condicional por estado de autenticacion (modelo reutilizable
@@ -81,12 +49,47 @@ async function checkPermissionsGranted(): Promise<boolean> {
 export default function RootNavigator() {
   const {user, loading} = useAuth();
   const [permissionsGranted, setPermissionsGranted] = useState<boolean | null>(null);
+  const [permissionStates, setPermissionStates] = useState<{
+    camera: PermStatus;
+    notifications: PermStatus;
+  } | null>(null);
+
+  const recheckPermissions = useCallback(async () => {
+    try {
+      const result = await checkAllPermissions();
+      setPermissionStates({
+        camera: result.camera,
+        notifications: result.notifications,
+      });
+      setPermissionsGranted(result.allGranted);
+    } catch {
+      setPermissionsGranted(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (user && !user.passwordResetRequired) {
-      checkPermissionsGranted().then(setPermissionsGranted);
+      recheckPermissions();
+    } else {
+      setPermissionsGranted(null);
+      setPermissionStates(null);
     }
-  }, [user]);
+  }, [user, recheckPermissions]);
+
+  // Re-verificar permisos al volver de background (AppState → active)
+  useEffect(() => {
+    if (!user || user.passwordResetRequired) {
+      return;
+    }
+
+    const subscription = AppState.addEventListener('change', nextState => {
+      if (nextState === 'active') {
+        recheckPermissions();
+      }
+    });
+
+    return () => subscription?.remove();
+  }, [user, recheckPermissions]);
 
   // Inicializar NotificationService cuando los permisos se otorgan
   useEffect(() => {
@@ -145,6 +148,8 @@ export default function RootNavigator() {
             initialParams={{
               onPermissionsGranted: () => setPermissionsGranted(true),
               usuarioId: user.sub ? Number(user.sub) : undefined,
+              initialCameraState: permissionStates?.camera ?? 'askable',
+              initialNotificationsState: permissionStates?.notifications ?? 'askable',
             }}
             options={{headerShown: false, gestureEnabled: false}}
           />
