@@ -2,12 +2,14 @@ package pe.sistema.insectosbeneficos.usuarios;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.core.Response;
 
+import pe.sistema.insectosbeneficos.integridad.DependenciasService;
 import pe.sistema.insectosbeneficos.seguridad.ActualUsuario;
 import pe.sistema.insectosbeneficos.seguridad.ApiException;
 import pe.sistema.insectosbeneficos.seguridad.BcryptService;
@@ -60,6 +62,9 @@ public class UsuarioService {
     @Inject
     UsuarioMapper mapper;
 
+    @Inject
+    DependenciasService dependencias;
+
     // ------------------------------------------------------------------
     // RBAC
     // ------------------------------------------------------------------
@@ -104,6 +109,14 @@ public class UsuarioService {
         if (Objects.equals(objetivo.id, actual.getId())) {
             throw new ApiException(Response.Status.BAD_REQUEST, "NO_AUTO_DESACTIVACION",
                     "No puede desactivar su propio usuario");
+        }
+    }
+
+    /** Regla de integridad (v1.16.0): 409 si el usuario tiene registros operativos. */
+    private void verificarSinDependencias(Usuario u) {
+        if (dependencias.usuarioTieneDependencias(u.id)) {
+            throw new ApiException(Response.Status.CONFLICT, "REGISTRO_CON_DEPENDENCIAS",
+                    "El usuario tiene registros asociados y no puede eliminarse");
         }
     }
 
@@ -182,7 +195,21 @@ public class UsuarioService {
             // ADMIN solo ve Admin/Usuario (nunca Super Admin)
             lista = lista.stream().filter(u -> !ROL_SUPER_ADMIN.equals(u.rol.nombre)).toList();
         }
-        return lista.stream().map(mapper::toDto).toList();
+        // Batch: un solo set de ids con dependencias para todo el listado (v1.16.0)
+        Set<Long> conDeps = dependencias.usuariosConDependencias();
+        return lista.stream().map(u -> {
+            UsuarioDto dto = mapper.toDto(u);
+            dto.puedeEliminar = calcularPuedeEliminar(u, conDeps.contains(u.id));
+            return dto;
+        }).toList();
+    }
+
+    /** Flag de eliminacion (v1.16.0): ACTIVO y no seed, no propia cuenta, sin deps. */
+    private boolean calcularPuedeEliminar(Usuario u, boolean conDeps) {
+        return u.estado == EstadoUsuario.ACTIVO
+                && !ID_SEED_SUPER_ADMIN.equals(u.id)
+                && !Objects.equals(u.id, actual.getId())
+                && !conDeps;
     }
 
     private List<Usuario> buscar(String estado, Long rolId) {
@@ -217,7 +244,9 @@ public class UsuarioService {
             throw new ApiException(Response.Status.NOT_FOUND, "USUARIO_NO_ENCONTRADO", "Usuario no encontrado");
         }
         verificarPuedeGestionar(u.rol.nombre);
-        return mapper.toDto(u);
+        UsuarioDto dto = mapper.toDto(u);
+        dto.puedeEliminar = calcularPuedeEliminar(u, dependencias.usuarioTieneDependencias(u.id));
+        return dto;
     }
 
     // ------------------------------------------------------------------
@@ -256,7 +285,9 @@ public class UsuarioService {
         u.email = email;
         u.creadoPor = actual.getId();
         u.persist();
-        return mapper.toDto(u);
+        UsuarioDto dto = mapper.toDto(u);
+        dto.puedeEliminar = calcularPuedeEliminar(u, false);
+        return dto;
     }
 
     // ------------------------------------------------------------------
@@ -286,6 +317,10 @@ public class UsuarioService {
             verificarSeedInmune(u);
             verificarNoEsUltimoSuperAdminActivo(u);
             verificarNoAutoDesactivacion(u);
+            // Transicion ACTIVO -> INACTIVO: mismo 409 que el DELETE (v1.16.0)
+            if (u.estado == EstadoUsuario.ACTIVO) {
+                verificarSinDependencias(u);
+            }
         }
 
         u.usuario = req.usuario.trim();
@@ -301,7 +336,9 @@ public class UsuarioService {
         }
         u.updatedAt = java.time.Instant.now();
         u.persist();
-        return mapper.toDto(u);
+        UsuarioDto dto = mapper.toDto(u);
+        dto.puedeEliminar = calcularPuedeEliminar(u, dependencias.usuarioTieneDependencias(u.id));
+        return dto;
     }
 
     // ------------------------------------------------------------------
@@ -322,6 +359,8 @@ public class UsuarioService {
         verificarSeedInmune(u);
         verificarNoEsUltimoSuperAdminActivo(u);
         verificarNoAutoDesactivacion(u);
+        // Registros operativos asociados -> 409 (v1.16.0)
+        verificarSinDependencias(u);
 
         u.estado = EstadoUsuario.INACTIVO;
         u.updatedAt = java.time.Instant.now();

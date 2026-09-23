@@ -16,6 +16,8 @@ import AppCard from '../components/AppCard';
 import AppHeader from '../components/AppHeader';
 import AppInput from '../components/AppInput';
 import BottomNavigation from '../components/BottomNavigation';
+import CatalogoCrudTab from '../components/CatalogoCrudTab';
+import CatalogoLecturaTab from '../components/CatalogoLecturaTab';
 import ConfirmDialog from '../components/ConfirmDialog';
 import MessageDialog from '../components/MessageDialog';
 import EmptyState from '../components/EmptyState';
@@ -32,6 +34,7 @@ import {
   fetchRoles,
   listarUsuarios,
   type ActualizarUsuarioRequest,
+  type CatalogoEndpoint,
   type CrearUsuarioRequest,
   type RolDto,
   type UsuarioDto,
@@ -39,8 +42,44 @@ import {
 import {theme} from '../theme';
 import {isAdminOrSuperAdmin} from '../utils/roles';
 
-type CatalogosTab = 'Usuarios' | 'Perfiles';
+type CatalogosTab =
+  | 'Perfiles'
+  | 'Usuarios'
+  | 'Especies'
+  | 'Nematodos'
+  | 'Plagas'
+  | 'Patrones'
+  | 'Fundos'
+  | 'Variedades'
+  | 'Lotes';
 type EstadoFiltro = 'TODOS' | 'ACTIVO' | 'INACTIVO';
+
+/** Tabs CRUD de catálogos simples (v1.15.0): endpoint + singular. Solo Admin/SA. */
+const CATALOGO_TABS: Array<{
+  tab: CatalogosTab;
+  endpoint: CatalogoEndpoint;
+  singular: string;
+}> = [
+  {tab: 'Especies', endpoint: '/especies', singular: 'especie'},
+  {tab: 'Nematodos', endpoint: '/nematodos', singular: 'nematodo'},
+  {tab: 'Plagas', endpoint: '/plagas', singular: 'plaga'},
+  {tab: 'Patrones', endpoint: '/patrones', singular: 'patrón'},
+];
+
+const TABS_ADMIN: CatalogosTab[] = [
+  'Usuarios',
+  'Perfiles',
+  ...CATALOGO_TABS.map(c => c.tab),
+  'Fundos',
+  'Variedades',
+  'Lotes',
+];
+
+/**
+ * Tabs SOLO LECTURA para roles no admin (Q4 v1.16.0): Perfiles +
+ * Fundos/Variedades/Lotes (CRUD de esos tres solo Admin/SA).
+ */
+const TABS_LECTURA: CatalogosTab[] = ['Perfiles', 'Fundos', 'Variedades', 'Lotes'];
 
 /** Perfiles (solo informativo): descripciones de la spec §6 — NO editables. */
 const PERFILES: Array<{nombre: string; icono: string; descripcion: string}> = [
@@ -302,7 +341,7 @@ export default function CatalogosScreen() {
     editando: UsuarioDto | null;
   }>(null);
   const [confirm, setConfirm] = useState<null | {
-    tipo: 'desactivar' | 'reactivar';
+    tipo: 'eliminar' | 'reactivar';
     usuario: UsuarioDto;
   }>(null);
 
@@ -356,11 +395,11 @@ export default function CatalogosScreen() {
     const {tipo, usuario: target} = confirm;
     setConfirm(null);
     try {
-      if (tipo === 'desactivar') {
+      if (tipo === 'eliminar') {
         await desactivarUsuario(target.id);
         setNotificacion({
           tipo: 'ok',
-          texto: `Usuario "${target.usuario}" desactivado correctamente`,
+          texto: `Usuario "${target.usuario}" eliminado correctamente`,
         });
       } else {
         await actualizarUsuario(target.id, {
@@ -499,15 +538,17 @@ export default function CatalogosScreen() {
                   accessibilityLabel={`Editar ${u.usuario}`}
                 />
                 {u.estado === 'ACTIVO' ? (
-                  <AppButton
-                    label="Desactivar"
-                    variant="text"
-                    icon="account-off-outline"
-                    onPress={() =>
-                      setConfirm({tipo: 'desactivar', usuario: u})
-                    }
-                    accessibilityLabel={`Desactivar ${u.usuario}`}
-                  />
+                  u.puedeEliminar !== false ? (
+                    <AppButton
+                      label="Eliminar"
+                      variant="text"
+                      icon="trash-can-outline"
+                      onPress={() =>
+                        setConfirm({tipo: 'eliminar', usuario: u})
+                      }
+                      accessibilityLabel={`Eliminar ${u.usuario}`}
+                    />
+                  ) : null
                 ) : (
                   <AppButton
                     label="Reactivar"
@@ -568,15 +609,40 @@ export default function CatalogosScreen() {
     </View>
   );
 
+  const catActivo = CATALOGO_TABS.find(c => c.tab === tab);
+  const contenido =
+    tab === 'Usuarios' && puedeGestionar ? (
+      renderUsuariosTab()
+    ) : tab === 'Perfiles' ? (
+      renderPerfilesTab()
+    ) : catActivo && puedeGestionar ? (
+      <CatalogoCrudTab
+        endpoint={catActivo.endpoint}
+        plural={catActivo.tab}
+        singular={catActivo.singular}
+      />
+    ) : tab === 'Fundos' || tab === 'Variedades' || tab === 'Lotes' ? (
+      <CatalogoLecturaTab
+        tipo={tab === 'Fundos' ? 'fundos' : tab === 'Variedades' ? 'variedades' : 'lotes'}
+      />
+    ) : (
+      renderPerfilesTab()
+    );
+
+  const tabsVisibles = puedeGestionar ? TABS_ADMIN : TABS_LECTURA;
+
   return (
     <ErrorBoundary
       fallbackTitle="No se pudo cargar catálogos"
       fallbackMessage="Reintente nuevamente o cierre su sesión.">
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <AppHeader title="Catálogos" />
-        {puedeGestionar ? (
-          <View style={styles.tabs}>
-            {(['Usuarios', 'Perfiles'] as CatalogosTab[]).map(t => {
+        <View style={styles.tabs}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.tabsRow}>
+            {tabsVisibles.map(t => {
               const activo = tab === t;
               return (
                 <Pressable
@@ -593,8 +659,8 @@ export default function CatalogosScreen() {
                 </Pressable>
               );
             })}
-          </View>
-        ) : null}
+          </ScrollView>
+        </View>
 
         <ScrollView
           style={styles.scroll}
@@ -602,9 +668,7 @@ export default function CatalogosScreen() {
             styles.content,
             {paddingBottom: 32 + insets.bottom + 68},
           ]}>
-          {tab === 'Usuarios' && puedeGestionar
-            ? renderUsuariosTab()
-            : renderPerfilesTab()}
+          {contenido}
         </ScrollView>
         <BottomNavigation active="Catalogos" />
 
@@ -618,21 +682,25 @@ export default function CatalogosScreen() {
         <ConfirmDialog
           visible={confirm !== null}
           title={
-            confirm?.tipo === 'reactivar' ? 'Reactivar usuario' : 'Desactivar usuario'
+            confirm?.tipo === 'reactivar'
+              ? 'Reactivar usuario'
+              : 'Eliminar usuario'
           }
           message={
             confirm
               ? confirm.tipo === 'reactivar'
                 ? `¿Deseas reactivar el usuario "${confirm.usuario.usuario}"?`
-                : `¿Deseas desactivar el usuario "${confirm.usuario.usuario}"? Los usuarios desactivados no podrán acceder al sistema.`
+                : `¿Deseas eliminar el usuario "${confirm.usuario.usuario}"? El usuario pasará a Inactivo y no podrá acceder al sistema.`
               : ''
           }
-          confirmLabel={confirm?.tipo === 'reactivar' ? 'Reactivar' : 'Desactivar'}
+          confirmLabel={
+            confirm?.tipo === 'reactivar' ? 'Reactivar' : 'Eliminar'
+          }
           tone={confirm?.tipo === 'reactivar' ? 'default' : 'danger'}
           confirmAccessibilityLabel={
             confirm?.tipo === 'reactivar'
               ? 'Confirmar reactivación'
-              : 'Confirmar desactivación'
+              : 'Confirmar eliminación'
           }
           onCancel={() => setConfirm(null)}
           onConfirm={ejecutarConfirm}
@@ -662,15 +730,18 @@ const styles = StyleSheet.create({
     gap: theme.spacing[4],
   },
   tabs: {
-    flexDirection: 'row',
     backgroundColor: theme.colors.background.neutral,
     borderRadius: theme.radius.lg,
     padding: theme.spacing[1],
     marginHorizontal: theme.spacing[4],
     marginTop: theme.spacing[2],
   },
+  tabsRow: {
+    flexDirection: 'row',
+  },
   tab: {
-    flex: 1,
+    minWidth: 92,
+    paddingHorizontal: theme.spacing[3],
     minHeight: 44,
     borderRadius: theme.radius.md,
     alignItems: 'center',

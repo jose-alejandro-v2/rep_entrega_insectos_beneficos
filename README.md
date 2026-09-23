@@ -42,13 +42,14 @@ backend/      API Quarkus v2 — auth/usuarios bajo /api/v1, login 3 pasos, role
               fotos de requerimiento (bytes BYTEA en BD, V20), sync offline,
               cumplimiento de producción, despachos/recepciones/liberaciones,
               notificaciones multi-canal (SMTP relay interno + Firebase FCM + in-app V25),
-              dispositivos FCM (V24)
-              (migraciones V1-V25, Dockerfile multi-stage, TZ America/Lima)
+              dispositivos FCM (V24), CRUD catálogos simples (V1-V25, sin migración nueva),
+              Dockerfile multi-stage, TZ America/Lima)
 mobile/       App React Native CLI 0.86 / React 19.2.3 — auth v2 (login 3 pasos, URL runtime,
               SecureStore/keychain), módulos Programación (Lunes/Jueves reales + Restante, pull-to-refresh,
               cumplimiento de producción), Requerimientos (multi-select lotes/plagas, evidencia de entrega
-              en estado Aprobado), Catálogos (Usuarios con correo electrónico), fotos de requerimiento
-               + hook usePhotoCapture, notificaciones in-app + FCM — versión 1.14.3
+              en estado Aprobado), Catálogos (Usuarios con correo electrónico), CRUD de catálogos simples
+              + Eliminar con dependencias + tabs lectura Fundos/Variedades/Lotes
+              + hook usePhotoCapture, notificaciones in-app + FCM — versión 1.16.0
 web/          Frontend React + Vite (pendiente de scaffold)
 docs_implementacion/
 ├── _sdd/                      Especificación, plan, tareas e implementación
@@ -183,6 +184,26 @@ docs_implementacion/
   en RootNavigator (ya no dispara diálogos al solo checar). Re-validación al volver de
   background (AppState). "Continuar" bloqueado hasta ambos permisos otorgados.
   Versión **1.14.5** / versionCode 22. Mobile: 145 tests · Backend: 102 tests (0 fallas).
+- **v1.15.0 (2026-09-22) = CRUD de catálogos simples**: alta, edición, desactivación
+  y reactivación de Especies, Nematodos, Plagas y Patrones desde la app (mismas
+  pantallas y experiencia que Usuarios). Nuevas pestañas solo para Admin/Super Admin,
+  con búsqueda y filtros de estado; desactivación con confirmación y reactivación en
+  un toque. Backend: endpoints CRUD protegidos por rol con validación de duplicados.
+  Fix de la suite Jest (mocks de Firebase Messaging y notifee): ahora corren las 23
+  suites. Versión **1.15.0** / versionCode 23. Backend: 134 tests (0 fallas) ·
+  Mobile: 153 tests (138 pass / 15 fallos latentes pre-existentes, sin regresiones).
+- **v1.16.0 (2026-09-23) = Eliminar con dependencias + tabs lectura Fundos/Variedades/Lotes**:
+  botón **"Eliminar"** en Usuarios y catálogos Especies/Nematodos/Plagas/Patrones que solo
+  se muestra si no hay dependencias (flag `puedeEliminar`; hide en UI si `false`). Backend:
+  `DependenciasService` con conteos batch + 409 `REGISTRO_CON_DEPENDENCIAS` en `eliminar()`
+  y transición ACTIVO→INACTIVO en `actualizar()`. Usuarios: deps = `creadoPor` SOLO en
+  requerimientos/despachos/recepciones/liberaciones/cumplimiento (excluye notificaciones,
+  dispositivos_tokens, usuarios.creado_por). Catálogos: deps = usos en programaciones/
+  requerimientos. **Nuevo tab solo lectura** `CatalogoLecturaTab` para Fundos, Variedades y
+  Lotes: Admin ve **9 tabs**; no-admin ve **4 tabs** (Perfiles, Fundos, Variedades, Lotes);
+  barra de tabs siempre visible. Versión **1.16.0** / versionCode 24. Backend: 140 tests
+  (0 fallas) · Mobile: 159 tests (144 pass / 15 fallos latentes en 7 suites sin tocar;
+  CatalogosScreen 24/24 PASS).
 - **Pendientes**: frontend web (React/Vite) y CI/CD (GitHub Actions).
   Ver [`docs_implementacion/_sdd/`](docs_implementacion/_sdd/).
 

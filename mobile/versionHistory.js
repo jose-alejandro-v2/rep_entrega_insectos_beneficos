@@ -6,6 +6,28 @@
 
 const versionHistory = [
   {
+    version: '1.16.0',
+    fecha: '2026-09-23',
+    cambios: [
+      'Botón "Eliminar" en Usuarios y en los catálogos Especies, Nematodos, Plagas y Patrones: solo se muestra cuando el registro no tiene dependencias (flag puedeEliminar).',
+      'Si el registro tiene dependencias, el botón se oculta; el backend responde 409 REGISTRO_CON_DEPENDENCIAS si se intenta eliminar igual.',
+      'Nuevo tab solo lectura de Fundos, Variedades y Lotes: cualquier rol puede consultar los 3 catálogos desde la app (Admin ve 9 tabs; el resto 4 tabs: Perfiles, Fundos, Variedades, Lotes).',
+      'Backend: DependenciasService con conteos batch; usuarios (creadoPor en requerimientos/despachos/recepciones/liberaciones/cumplimiento) y catálogos (usos en programaciones/requerimientos) evitan borrado si tienen usos.',
+      'Dialogs de confirmación de eliminación con textos diferenciados para usuario vs catálogo.',
+    ],
+  },
+  {
+    version: '1.15.0',
+    fecha: '2026-09-22',
+    cambios: [
+      'Catálogos: gestión completa (alta, edición, desactivación y reactivación) de Especies, Nematodos, Plagas y Patrones desde la app, con la misma experiencia del tab Usuarios.',
+      'Nuevas pestañas Especies, Nematodos, Plagas y Patrones en Catálogos (solo Admin/Super Admin), con búsqueda y filtros de estado (Todos/Activos/Inactivos).',
+      'Desactivación con confirmación (soft delete) y reactivación en un toque; el listado se refresca automáticamente tras cada cambio.',
+      'Backend: endpoints CRUD protegidos por rol (GET público; POST/PUT/DELETE solo Admin/Super Admin) para los 4 catálogos, con validación de nombre duplicado.',
+      'Fix de suite de pruebas: mocks de Firebase Messaging y notifee que permiten ejecutar las 23 suites en Jest (antes 18 no llegaban a correr).',
+    ],
+  },
+  {
     version: '1.14.5',
     fecha: '2026-09-21',
     cambios: [

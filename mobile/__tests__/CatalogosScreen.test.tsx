@@ -1,12 +1,18 @@
 /**
- * CatalogosScreen — Catálogos (HITO-003):
+ * CatalogosScreen — Catálogos (HITO-003 + v1.15.0 + v1.16.0):
  *  - Tab "Usuarios" (solo Super Admin/Admin): listado (SÓLO Admin/Usuario;
  *    Super Admin es inamovible y no aparece) con filtros de estado + búsqueda
  *    local, crear usuario (solo Usuario + Perfil; nombre = usuario) y editar
- *    (Nombre editable + DNI solo lectura), desactivar y reactivar (soft
- *    delete / PUT ACTIVO) con ConfirmDialog.
+ *    (Nombre editable + DNI solo lectura), Eliminar (solo si puedeEliminar)
+ *    y reactivar (soft delete / PUT ACTIVO) con ConfirmDialog.
  *  - Tab "Perfiles" (informativo, visible para todos): tarjetas estáticas de
  *    los 3 perfiles según la spec §6 — NO editables.
+ *  - Tabs CRUD de catálogos simples (Especies/Nematodos/Plagas/Patrones,
+ *    v1.15.0): alta/edición con POST/PUT, Eliminar con DELETE + confirm
+ *    (solo si puedeEliminar), filtros y búsqueda locales — CatalogoCrudTab.
+ *  - Tabs SOLO LECTURA Fundos/Variedades/Lotes (v1.16.0, Q4): visibles para
+ *    todos los roles; admin ve 9 tabs, no-admin 4 (Perfiles + estos 3).
+ *    Sin botón "Agregar"; Lotes con buscador local y GET /lotes sin params.
  *
  * Approach (igual que PerfilScreen/HomeScreen.test.tsx): react-test-renderer +
  * AuthProvider + mock de Keychain (JWT fabricado con makeToken) + mock axios
@@ -136,6 +142,42 @@ function mockListados() {
     }
     if (url === '/usuarios') {
       return Promise.resolve({data: USUARIOS_JWT});
+    }
+    if (url === '/fundos') {
+      return Promise.resolve({
+        data: [{id: 1, nombre: 'Fundo Demo', createdAt: '', updatedAt: ''}],
+      });
+    }
+    if (url === '/variedades') {
+      return Promise.resolve({
+        data: [
+          {
+            id: 1,
+            nombre: 'Red Globe',
+            color: '#B71C1C',
+            createdAt: '',
+            updatedAt: '',
+          },
+        ],
+      });
+    }
+    if (url === '/lotes') {
+      return Promise.resolve({
+        data: [
+          {
+            id: 1,
+            fundoId: 1,
+            fundo: 'Fundo Demo',
+            variedadId: 1,
+            variedad: 'Red Globe',
+            variedadColor: '#B71C1C',
+            nombre: 'Lote A',
+            area: 12.5,
+            createdAt: '',
+            updatedAt: '',
+          },
+        ],
+      });
     }
     return Promise.resolve({data: []});
   });
@@ -375,7 +417,7 @@ describe('CatalogosScreen — tab Usuarios (Super Admin)', () => {
     });
   });
 
-  test('desactiva con ConfirmDialog → DELETE /usuarios/{id} (soft delete)', async () => {
+  test('elimina con ConfirmDialog → DELETE /usuarios/{id} (soft delete)', async () => {
     mockListados();
     api.delete.mockResolvedValue({data: {mensaje: 'ok'}});
     const tree = await renderCatalogo(TOKEN_SUPER);
@@ -383,21 +425,21 @@ describe('CatalogosScreen — tab Usuarios (Super Admin)', () => {
       await flushPromises();
     });
 
-    expect(contarTexto(tree, 'Desactivar usuario')).toBe(0);
+    expect(contarTexto(tree, 'Eliminar usuario')).toBe(0);
     await act(async () => {
-      findByLabel(tree, 'Desactivar jose.sanidad').props.onPress();
+      findByLabel(tree, 'Eliminar jose.sanidad').props.onPress();
     });
 
-    expect(contarTexto(tree, 'Desactivar usuario')).toBe(1);
+    expect(contarTexto(tree, 'Eliminar usuario')).toBe(1);
     expect(
       contarTexto(
         tree,
-        '¿Deseas desactivar el usuario "jose.sanidad"? Los usuarios desactivados no podrán acceder al sistema.',
+        '¿Deseas eliminar el usuario "jose.sanidad"? El usuario pasará a Inactivo y no podrá acceder al sistema.',
       ),
     ).toBe(1);
 
     await act(async () => {
-      findByLabel(tree, 'Confirmar desactivación').props.onPress();
+      findByLabel(tree, 'Confirmar eliminación').props.onPress();
     });
     await act(async () => {
       await flushPromises();
@@ -407,9 +449,38 @@ describe('CatalogosScreen — tab Usuarios (Super Admin)', () => {
     expect(
       contarTexto(
         tree,
-        'Usuario "jose.sanidad" desactivado correctamente',
+        'Usuario "jose.sanidad" eliminado correctamente',
       ),
     ).toBe(1);
+  });
+
+  test('usuario con puedeEliminar=false no muestra el botón Eliminar (Q3 hide)', async () => {
+    mockListados();
+    // Simula backend: jose.sanidad tiene registros asociados → flag false.
+    api.get.mockImplementation((url: string) => {
+      if (url === '/auth/roles') {
+        return Promise.resolve({data: ROLES});
+      }
+      if (url === '/usuarios') {
+        return Promise.resolve({
+          data: USUARIOS_JWT.map(u =>
+            u.usuario === 'jose.sanidad' ? {...u, puedeEliminar: false} : u,
+          ),
+        });
+      }
+      return Promise.resolve({data: []});
+    });
+    const tree = await renderCatalogo(TOKEN_SUPER);
+    await act(async () => {
+      await flushPromises();
+    });
+
+    expect(() => findByLabel(tree, 'Eliminar jose.sanidad')).toThrow();
+    // El de ana.admin (INACTIVO) tampoco muestra Eliminar (solo Reactivar).
+    expect(() => findByLabel(tree, 'Eliminar ana.admin')).toThrow();
+    expect(findByLabel(tree, 'Reactivar ana.admin')).toBeTruthy();
+    // Editar sigue disponible.
+    expect(findByLabel(tree, 'Editar jose.sanidad')).toBeTruthy();
   });
 
   test('reactiva un usuario inactivo con PUT estado ACTIVO', async () => {
@@ -470,11 +541,16 @@ describe('CatalogosScreen — tab Perfiles (informativo)', () => {
     api.delete.mockClear();
   });
 
-  test('usuario común ve solo Perfiles (sin tab Usuarios) con las tarjetas de la spec', async () => {
+  test('usuario común ve 4 tabs (Perfiles/Fundos/Variedades/Lotes) sin tab Usuarios', async () => {
     mockListados();
     const tree = await renderCatalogo(TOKEN_USUARIO);
 
-    // Sin tab Usuarios para rol operativo: la pestaña de gestión no existe.
+    // Q4 v1.16.0: no-admin ve tabs de solo lectura.
+    expect(findByLabel(tree, 'Tab Perfiles')).toBeTruthy();
+    expect(findByLabel(tree, 'Tab Fundos')).toBeTruthy();
+    expect(findByLabel(tree, 'Tab Variedades')).toBeTruthy();
+    expect(findByLabel(tree, 'Tab Lotes')).toBeTruthy();
+    // Sin tab Usuarios ni CRUDs para rol operativo.
     expect(() => findByLabel(tree, 'Tab Usuarios')).toThrow();
     expect(() => findByLabel(tree, 'Nuevo usuario')).toThrow();
 
@@ -511,6 +587,353 @@ describe('CatalogosScreen — tab Perfiles (informativo)', () => {
     expect(contarTexto(tree, 'Usuario')).toBeGreaterThan(0);
 
     // Sin acciones de edición en la pestaña informativa.
+    expect(() => findByLabel(tree, 'Nuevo usuario')).toThrow();
+  });
+});
+
+describe('CatalogosScreen — tabs de catálogos CRUD (v1.15.0)', () => {
+  beforeEach(async () => {
+    await clearToken();
+    api.get.mockClear();
+    api.post.mockClear();
+    api.put.mockClear();
+    api.delete.mockClear();
+  });
+
+  test('admin ve los 9 tabs (Usuarios, Perfiles, 4 catálogos y lectura)', async () => {
+    mockListados();
+    const tree = await renderCatalogo(TOKEN_SUPER);
+    await act(async () => {
+      await flushPromises();
+    });
+
+    expect(findByLabel(tree, 'Tab Usuarios')).toBeTruthy();
+    expect(findByLabel(tree, 'Tab Perfiles')).toBeTruthy();
+    expect(findByLabel(tree, 'Tab Especies')).toBeTruthy();
+    expect(findByLabel(tree, 'Tab Nematodos')).toBeTruthy();
+    expect(findByLabel(tree, 'Tab Plagas')).toBeTruthy();
+    expect(findByLabel(tree, 'Tab Patrones')).toBeTruthy();
+    expect(findByLabel(tree, 'Tab Fundos')).toBeTruthy();
+    expect(findByLabel(tree, 'Tab Variedades')).toBeTruthy();
+    expect(findByLabel(tree, 'Tab Lotes')).toBeTruthy();
+  });
+
+  test('cambia al tab Especies: lista vía GET /especies y ofrece Agregar', async () => {
+    mockListados();
+    const tree = await renderCatalogo(TOKEN_SUPER);
+    await act(async () => {
+      await flushPromises();
+    });
+
+    await act(async () => {
+      findByLabel(tree, 'Tab Especies').props.onPress();
+    });
+    await act(async () => {
+      await flushPromises();
+    });
+
+    expect(api.get).toHaveBeenCalledWith('/especies');
+    expect(findByLabel(tree, 'Agregar especie')).toBeTruthy();
+    expect(contarTexto(tree, 'No hay especies')).toBe(1);
+    expect(findByLabel(tree, 'Filtrar Activos')).toBeTruthy();
+    expect(findByLabel(tree, 'Buscar especie')).toBeTruthy();
+  });
+
+  test('crea una especie con POST /especies y muestra confirmación', async () => {
+    mockListados();
+    api.post.mockResolvedValue({data: {id: 1, nombre: 'Trichogramma', estado: 'ACTIVO'}});
+    const tree = await renderCatalogo(TOKEN_SUPER);
+    await act(async () => {
+      await flushPromises();
+    });
+
+    await act(async () => {
+      findByLabel(tree, 'Tab Especies').props.onPress();
+    });
+    await act(async () => {
+      await flushPromises();
+    });
+
+    await act(async () => {
+      findByLabel(tree, 'Agregar especie').props.onPress();
+    });
+    await act(async () => {
+      await flushPromises();
+    });
+
+    await act(async () => {
+      findByLabel(tree, 'Campo nombre').props.onChangeText('Trichogramma');
+    });
+    await act(async () => {
+      await flushPromises();
+    });
+
+    await act(async () => {
+      findByLabel(tree, 'Guardar especie').props.onPress();
+    });
+    await act(async () => {
+      await flushPromises();
+    });
+
+    expect(api.post).toHaveBeenCalledWith('/especies', {
+      nombre: 'Trichogramma',
+    });
+    expect(
+      contarTexto(tree, 'Se agregó "Trichogramma" correctamente'),
+    ).toBe(1);
+  });
+
+  test('edita una especie con PUT /especies/{id} (solo nombre)', async () => {
+    api.get.mockImplementation((url: string) => {
+      if (url === '/auth/roles') {
+        return Promise.resolve({data: ROLES});
+      }
+      if (url === '/usuarios') {
+        return Promise.resolve({data: USUARIOS_JWT});
+      }
+      if (url === '/especies') {
+        return Promise.resolve({
+          data: [{id: 7, nombre: 'Trichogramma', estado: 'ACTIVO'}],
+        });
+      }
+      return Promise.resolve({data: []});
+    });
+    api.put.mockResolvedValue({data: {id: 7, nombre: 'Trichogramma m!', estado: 'ACTIVO'}});
+    const tree = await renderCatalogo(TOKEN_SUPER);
+    await act(async () => {
+      await flushPromises();
+    });
+
+    await act(async () => {
+      findByLabel(tree, 'Tab Especies').props.onPress();
+    });
+    await act(async () => {
+      await flushPromises();
+    });
+
+    expect(contarTexto(tree, 'Trichogramma')).toBeGreaterThan(0);
+
+    await act(async () => {
+      findByLabel(tree, 'Editar Trichogramma').props.onPress();
+    });
+    await act(async () => {
+      await flushPromises();
+    });
+
+    await act(async () => {
+      findByLabel(tree, 'Campo nombre').props.onChangeText('Trichogramma m!');
+    });
+    await act(async () => {
+      await flushPromises();
+    });
+    await act(async () => {
+      findByLabel(tree, 'Guardar especie').props.onPress();
+    });
+    await act(async () => {
+      await flushPromises();
+    });
+
+    expect(api.put).toHaveBeenCalledWith('/especies/7', {
+      nombre: 'Trichogramma m!',
+    });
+    expect(
+      contarTexto(tree, 'Se actualizó "Trichogramma m!" correctamente'),
+    ).toBe(1);
+  });
+
+  test('elimina con ConfirmDialog → DELETE /especies/{id} (soft delete)', async () => {
+    api.get.mockImplementation((url: string) => {
+      if (url === '/auth/roles') {
+        return Promise.resolve({data: ROLES});
+      }
+      if (url === '/usuarios') {
+        return Promise.resolve({data: USUARIOS_JWT});
+      }
+      if (url === '/especies') {
+        return Promise.resolve({
+          data: [{id: 7, nombre: 'Trichogramma', estado: 'ACTIVO'}],
+        });
+      }
+      return Promise.resolve({data: []});
+    });
+    api.delete.mockResolvedValue({data: {mensaje: 'ok'}});
+    const tree = await renderCatalogo(TOKEN_SUPER);
+    await act(async () => {
+      await flushPromises();
+    });
+
+    await act(async () => {
+      findByLabel(tree, 'Tab Especies').props.onPress();
+    });
+    await act(async () => {
+      await flushPromises();
+    });
+
+    expect(contarTexto(tree, 'Eliminar especie')).toBe(0);
+    await act(async () => {
+      findByLabel(tree, 'Eliminar Trichogramma').props.onPress();
+    });
+
+    expect(contarTexto(tree, 'Eliminar especie')).toBe(1);
+    expect(
+      contarTexto(
+        tree,
+        '¿Deseas eliminar "Trichogramma"? El registro pasará a Inactivo y dejará de estar disponible para nuevos requerimientos.',
+      ),
+    ).toBe(1);
+
+    await act(async () => {
+      findByLabel(tree, 'Confirmar eliminación').props.onPress();
+    });
+    await act(async () => {
+      await flushPromises();
+    });
+
+    expect(api.delete).toHaveBeenCalledWith('/especies/7');
+    expect(contarTexto(tree, '"Trichogramma" pasó a Inactivo')).toBe(1);
+  });
+
+  test('especie con puedeEliminar=false oculta el botón Eliminar (Q3 hide)', async () => {
+    api.get.mockImplementation((url: string) => {
+      if (url === '/auth/roles') {
+        return Promise.resolve({data: ROLES});
+      }
+      if (url === '/usuarios') {
+        return Promise.resolve({data: USUARIOS_JWT});
+      }
+      if (url === '/especies') {
+        return Promise.resolve({
+          data: [
+            {
+              id: 7,
+              nombre: 'Trichogramma',
+              estado: 'ACTIVO',
+              puedeEliminar: false,
+            },
+          ],
+        });
+      }
+      return Promise.resolve({data: []});
+    });
+    const tree = await renderCatalogo(TOKEN_SUPER);
+    await act(async () => {
+      await flushPromises();
+    });
+
+    await act(async () => {
+      findByLabel(tree, 'Tab Especies').props.onPress();
+    });
+    await act(async () => {
+      await flushPromises();
+    });
+
+    expect(() => findByLabel(tree, 'Eliminar Trichogramma')).toThrow();
+    expect(findByLabel(tree, 'Editar Trichogramma')).toBeTruthy();
+  });
+
+  test('usuario común no ve los tabs de catálogos CRUD', async () => {
+    mockListados();
+    const tree = await renderCatalogo(TOKEN_USUARIO);
+
+    expect(() => findByLabel(tree, 'Tab Especies')).toThrow();
+    expect(() => findByLabel(tree, 'Tab Nematodos')).toThrow();
+    expect(() => findByLabel(tree, 'Tab Plagas')).toThrow();
+    expect(() => findByLabel(tree, 'Tab Patrones')).toThrow();
+    expect(() => findByLabel(tree, 'Agregar especie')).toThrow();
+  });
+});
+
+describe('CatalogosScreen — tabs lectura Fundos/Variedades/Lotes (v1.16.0, Q4)', () => {
+  beforeEach(async () => {
+    await clearToken();
+    api.get.mockClear();
+    api.post.mockClear();
+    api.put.mockClear();
+    api.delete.mockClear();
+  });
+
+  test('tab Fundos lista GET /fundos sin botón Agregar (solo lectura)', async () => {
+    mockListados();
+    const tree = await renderCatalogo(TOKEN_SUPER);
+    await act(async () => {
+      await flushPromises();
+    });
+
+    await act(async () => {
+      findByLabel(tree, 'Tab Fundos').props.onPress();
+    });
+    await act(async () => {
+      await flushPromises();
+    });
+
+    expect(api.get).toHaveBeenCalledWith('/fundos');
+    expect(contarTexto(tree, 'Fundo Demo')).toBeGreaterThan(0);
+    expect(() => findByLabel(tree, 'Agregar fundo')).toThrow();
+    expect(() => findByLabel(tree, 'Nuevo fundo')).toThrow();
+  });
+
+  test('tab Variedades lista GET /variedades con color', async () => {
+    mockListados();
+    const tree = await renderCatalogo(TOKEN_SUPER);
+    await act(async () => {
+      await flushPromises();
+    });
+
+    await act(async () => {
+      findByLabel(tree, 'Tab Variedades').props.onPress();
+    });
+    await act(async () => {
+      await flushPromises();
+    });
+
+    expect(api.get).toHaveBeenCalledWith('/variedades');
+    expect(contarTexto(tree, 'Red Globe')).toBeGreaterThan(0);
+    expect(contarTexto(tree, '#B71C1C')).toBeGreaterThan(0);
+    expect(() => findByLabel(tree, 'Agregar variedad')).toThrow();
+  });
+
+  test('tab Lotes lista GET /lotes SIN params y busca localmente', async () => {
+    mockListados();
+    const tree = await renderCatalogo(TOKEN_SUPER);
+    await act(async () => {
+      await flushPromises();
+    });
+
+    await act(async () => {
+      findByLabel(tree, 'Tab Lotes').props.onPress();
+    });
+    await act(async () => {
+      await flushPromises();
+    });
+
+    // listarLotes() sin fundoId → GET /lotes sin params (v1.16.0).
+    expect(api.get).toHaveBeenCalledWith('/lotes', undefined);
+    expect(contarTexto(tree, 'Lote A')).toBeGreaterThan(0);
+    expect(contarTexto(tree, 'Fundo: Fundo Demo')).toBeGreaterThan(0);
+    expect(() => findByLabel(tree, 'Agregar lote')).toThrow();
+
+    // Buscador local (157 lotes en prod; aquí filtra la fila demo).
+    const buscador = findByLabel(tree, 'Buscar lote');
+    await act(async () => {
+      buscador.props.onChangeText('no-existe');
+    });
+    expect(contarTexto(tree, 'Sin resultados')).toBe(1);
+  });
+
+  test('usuario común también ve Fundos/Variedades/Lotes en modo lectura', async () => {
+    mockListados();
+    const tree = await renderCatalogo(TOKEN_USUARIO);
+
+    await act(async () => {
+      findByLabel(tree, 'Tab Fundos').props.onPress();
+    });
+    await act(async () => {
+      await flushPromises();
+    });
+
+    expect(api.get).toHaveBeenCalledWith('/fundos');
+    expect(contarTexto(tree, 'Fundo Demo')).toBeGreaterThan(0);
+    expect(() => findByLabel(tree, 'Agregar fundo')).toThrow();
     expect(() => findByLabel(tree, 'Nuevo usuario')).toThrow();
   });
 });

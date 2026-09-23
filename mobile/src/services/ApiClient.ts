@@ -403,6 +403,8 @@ export interface UsuarioDto {
   createdAt: string;
   updatedAt: string;
   lastLoginAt: string | null;
+  /** False si es seed, la propia cuenta o tiene registros asociados (v1.16.0). */
+  puedeEliminar?: boolean;
 }
 
 /** Cuerpo de POST /api/v1/usuarios (password siempre el default 00000000). */
@@ -737,9 +739,12 @@ export async function listarVariedades(): Promise<VariedadDto[]> {
   return unwrap(res.data as VariedadDto[] | {data?: VariedadDto[]});
 }
 
-/** GET /api/v1/lotes?fundoId=X — catálogo de lotes de un fundo. */
-export async function listarLotes(fundoId: number): Promise<LoteDto[]> {
-  const res = await api.get('/lotes', {params: {fundoId}});
+/** GET /api/v1/lotes — catálogo de lotes; sin fundoId devuelve todos (v1.16.0). */
+export async function listarLotes(fundoId?: number): Promise<LoteDto[]> {
+  const res = await api.get(
+    '/lotes',
+    fundoId != null ? {params: {fundoId}} : undefined,
+  );
   return unwrap(res.data as LoteDto[] | {data?: LoteDto[]});
 }
 
@@ -1118,4 +1123,73 @@ export async function crearLiberacion(
     req,
   );
   return res.data as LiberacionDto;
+}
+
+/* ------------------------------------------------------------------ */
+/* Catálogos simples CRUD (v1.15.0): Especies/Nematodos/Plagas/Patrones */
+/* ------------------------------------------------------------------ */
+
+/** Rutas de los catálogos simples gestionados por CatalogoCrudTab. */
+export type CatalogoEndpoint =
+  | '/especies'
+  | '/nematodos'
+  | '/plagas'
+  | '/patrones';
+
+/** Item de catálogo simple (nombre + estado de soft delete). */
+export interface CatalogoItemDto {
+  id: number;
+  nombre: string;
+  estado: boolean | string;
+  /** False si esta INACTIVO o tiene registros asociados (v1.16.0). */
+  puedeEliminar?: boolean;
+}
+
+/** Cuerpo de POST a un catálogo simple (el backend lo crea ACTIVO). */
+export interface CrearCatalogoRequest {
+  nombre: string;
+}
+
+/** Cuerpo de PUT a un catálogo simple (estado ausente = preserva el actual). */
+export interface ActualizarCatalogoRequest {
+  nombre: string;
+  estado?: 'ACTIVO' | 'INACTIVO';
+}
+
+/** GET /api/v1/{catalogo} — listado completo (el filtrado por estado es local). */
+export async function listarCatalogo(
+  endpoint: CatalogoEndpoint,
+): Promise<CatalogoItemDto[]> {
+  const res = await api.get(endpoint);
+  return unwrap(
+    res.data as CatalogoItemDto[] | {data?: CatalogoItemDto[]},
+  );
+}
+
+/** POST /api/v1/{catalogo} — crea un registro (Admin/Super Admin). */
+export async function crearCatalogo(
+  endpoint: CatalogoEndpoint,
+  req: CrearCatalogoRequest,
+): Promise<CatalogoItemDto> {
+  const res = await api.post(endpoint, req);
+  return res.data as CatalogoItemDto;
+}
+
+/** PUT /api/v1/{catalogo}/{id} — actualiza nombre y/o estado. */
+export async function actualizarCatalogo(
+  endpoint: CatalogoEndpoint,
+  id: number,
+  req: ActualizarCatalogoRequest,
+): Promise<CatalogoItemDto> {
+  const res = await api.put(`${endpoint}/${id}`, req);
+  return res.data as CatalogoItemDto;
+}
+
+/** DELETE /api/v1/{catalogo}/{id} — soft delete (estado INACTIVO). */
+export async function eliminarCatalogo(
+  endpoint: CatalogoEndpoint,
+  id: number,
+): Promise<{mensaje: string}> {
+  const res = await api.delete(`${endpoint}/${id}`);
+  return res.data as {mensaje: string};
 }

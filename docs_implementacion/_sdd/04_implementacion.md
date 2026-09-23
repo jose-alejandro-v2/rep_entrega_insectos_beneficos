@@ -10,9 +10,9 @@
 | Documento | 04_IMPLEMENTACION — Estado e historial de implementación |
 | Proyecto | Sistema de Control de Entrega de Insectos Benéficos |
 | Tipo Documento | SDD (historial de implementación) |
-| Estado | v1.14.5: permisos robustos (3 estados granted/askable/blocked) + re-verificación en foreground + verificación pasiva; 102 tests BE, 145 tests MO |
-| Versión | 1.14.5 / versionCode 22 |
-| Fecha | 2026-09-21 |
+| Estado | v1.16.0: Eliminar con dependencias (puedeEliminar + DependenciasService + 409) + tabs lectura Fundos/Variedades/Lotes (Admin 9 / resto 4); 140 tests BE, 144/15 tests MO |
+| Versión | 1.16.0 / versionCode 24 |
+| Fecha | 2026-09-23 |
 | Responsable | Orchestrator / Developer |
 | Repositorio | C:\repos\rep_entrega_insectos_beneficos |
 | Clasificación | Interno |
@@ -3594,3 +3594,139 @@ DENIED silenciosamente, pero sin guiar al usuario a reactivar.
 |---|---|
 | `npx eslint src/utils/permissions.ts src/navigation/RootNavigator.tsx src/screens/PermissionsScreen.tsx src/services/NotificationService.ts src/navigation/types.ts` | ✅ 0 errores |
 | `npm test -- --runInBand` | ⚠️ Fallos pre-existentes (mock ESM de @react-native-firebase/messaging). No hay nuevos fallos introducidos |
+
+---
+
+# 83. v1.15.0 — CRUD de catálogos simples (Especies/Nematodos/Plagas/Patrones) + fix suite Jest (2026-09-22)
+
+## 83.1 Resumen
+
+Gestión completa (alta, edición, desactivación y reactivación) de los 4 catálogos
+simples —**Especies, Nematodos, Plagas y Patrones**— desde el mobile, con la misma
+experiencia ya existente del tab Usuarios, y con los endpoints CRUD correspondientes
+en el backend.
+
+- **Backend**: `CatalogoCrudResource` genérico + 8 services/resources modificados
+  (`EspeciesResource`, `NematodosResource`, `PlagasResource`, `PatronesResource` y
+  sus services) con rutas `/api/v1/{especies|nematodos|plagas|patrones}(/{id})`.
+  GET `@PermitAll`; POST/PUT/DELETE Super Admin/Admin; DELETE retorna
+  `MensajeResponse {mensaje}` (soft delete); validación de nombre duplicado
+  y de registros ya inactivos.
+- **Mobile (decisión de diseño)**: CRUD **genérico** en `ApiClient.ts`
+  (`CatalogoEndpoint`, `CatalogoItemDto`, `CrearCatalogoRequest`,
+  `ActualizarCatalogoRequest`, `listarCatalogo`, `crearCatalogo`,
+  `actualizarCatalogo`, `eliminarCatalogo`) en lugar de 16 funciones nombradas;
+  **un solo componente compartido** `src/components/CatalogoCrudTab.tsx`
+  parametrizado por endpoint. `listarEspecies`/`listarPlagas` existentes NO se
+  tocan (los usan `useRequerimientosCatalogos` y `ProgramacionEdicionScreen`).
+- **Pantalla Catálogos**: 6 tabs (Usuarios, Perfiles, Especies, Nematodos,
+  Plagas, Patrones) solo visibles para `puedeGestionar` (Admin/Super Admin);
+  fila de tabs en `ScrollView horizontal` con `minWidth: 92` (6 tabs no caben
+  en 360 dp).
+- **Fix de infra de pruebas (pre-existente §82.3)**: añadidos mocks factory de
+  `@react-native-firebase/messaging` y `@notifee/react-native` en
+  `mobile/jest.setup.js` — 18 suites que no llegaban a correr por error ESM
+  (`Cannot use import statement outside a module`) ahora ejecutan.
+
+## 83.2 Archivos modificados / creados
+
+| Archivo | Cambio |
+|---|---|
+| `backend/.../CatalogoCrudResource.java` | **Nuevo** — CRUD genérico de catálogos simples |
+| `backend/.../{Especies,Nematodos,Plagas,Patrones}{Resource,Service}.java` | Endpoints POST/PUT/DELETE + validaciones |
+| `backend/.../{Crear,Actualizar}CatalogoRequest.java` | DTOs nuevos |
+| `backend/.../CatalogoCrudResourceTest.java` | **Nuevo** — tests del CRUD (134 tests BE en total) |
+| `mobile/src/services/ApiClient.ts` | Sección final CRUD genérico (4 funciones + tipos) |
+| `mobile/src/components/CatalogoCrudTab.tsx` | **Nuevo** — componente CRUD compartido (modal nombre, filtros, confirm, mensajes) |
+| `mobile/src/screens/CatalogosScreen.tsx` | 6 tabs, `CATALOGO_TABS`/`TABS_ADMIN`, routing, `tabsRow`/`tab.minWidth` |
+| `mobile/__tests__/CatalogosScreen.test.tsx` | +6 tests CRUD v1.15.0 (18/18 PASS) |
+| `mobile/jest.setup.js` | Mocks de `@react-native-firebase/messaging` y `@notifee/react-native` (fix ESM) |
+| `mobile/package.json` | `"version": "1.15.0"` |
+| `mobile/src/constants/appVersion.ts` | `APP_VERSION = '1.15.0'` |
+| `mobile/versionHistory.js` | Entrada v1.15.0 |
+| `mobile/android/app/build.gradle` | `versionName "1.15.0"` / `versionCode 23` |
+| `AGENTS.md` · `README.md` · `04_implementacion.md` | Conteos y entrada de versión |
+
+## 83.3 Verificación
+
+| Comando | Resultado |
+|---|---|
+| `mvn test` (backend) | ✅ **134 tests, 0 fallas** |
+| `npm run lint` (mobile) | ✅ **0 errores** (11 warnings pre-existentes de `no-bitwise` en `token.ts`) |
+| `npx jest --runInBand` (mobile) | ⚠️ **153 tests: 138 pass / 15 fail** — las 23 suites corren (antes 18 no arrancaban); **sin regresiones** (las 5 suites que pasaban siguen pasando); los 15 fallos son latentes pre-existentes en suites sin tocar (`flows/ciclo-entrega`, `flows/requerimiento`, `NuevoRequerimiento`, `ProgramacionEdicion`, `Perfil`, `Home`, `CambiarPassword`) — requieren tarea separada |
+| `npx jest CatalogosScreen` | ✅ **18/18 PASS** (12 previos + 6 nuevos) |
+
+**Nota Ley 5**: los 15 fallos latentes no fueron introducidos por este cambio
+(comparación control: `flows/ciclo-entrega` y `NuevoRequerimiento` fallaban de
+forma idéntica ANTES de los mocks; los demás no ejecutaban en absoluto y ahora
+al menos corren). Documentados aquí; no se tocaron en silencio.
+
+---
+
+# 84. v1.16.0 — Eliminar con dependencias + tabs lectura Fundos/Variedades/Lotes (2026-09-23)
+
+## 84.1 Resumen
+
+Botón **"Eliminar"** en Usuarios y en los catálogos Especies/Nematodos/Plagas/Patrones
+que **solo se muestra si el registro no tiene dependencias** (flag puedeEliminar en los
+DTOs; la UI oculta el botón si puedeEliminar === false). El backend expone
+DependenciasService con conteos batch y responde **409 REGISTRO_CON_DEPENDENCIAS**
+en eliminar() (después de los 400) y realiza transición ACTIVO→INACTIVO en
+ctualizar().
+
+- **Usuarios**: deps = creadoPor SOLO en equerimientos, despachos, ecepciones,
+  liberaciones, cumplimiento_programacion (EXCLUIR 
+otificaciones, dispositivos_tokens,
+  usuarios.creado_por). Flag = ACTIVO && id != seed(1) && id != actual && !deps.
+- **Catálogos** (Especies/Nematodos/Plagas/Patrones): deps = usos en programaciones y
+  equerimientos. Flag = "ACTIVO".equals(estado) && !deps.
+- **Nuevo tab solo lectura** CatalogoLecturaTab para Fundos, Variedades y Lotes:
+  Admin ve **9 tabs** (Usuarios, Perfiles, Especies, Nematodos, Plagas, Patrones, Fundos,
+  Variedades, Lotes); no-admin ve **4 tabs** (Perfiles, Fundos, Variedades, Lotes).
+  Barra de tabs siempre visible. listarLotes(fundoId?) en ApiClient.
+- **Dialogs** de confirmación diferenciados (usuario vs catálogo).
+
+## 84.2 Archivos modificados / creados
+
+| Archivo | Cambio |
+|---|---|
+| ackend/.../integridad/DependenciasService.java | **Nuevo** — conteos batch de deps (usuarios + catálogos) |
+| ackend/.../usuarios/{UsuarioService,dto/UsuarioDto}.java | puedeEliminar + 409 en eliminar |
+| ackend/.../programacion/{EspecieService,dto/EspecieDto}.java | puedeEliminar + 409 en eliminar |
+| ackend/.../catalogos/{Plaga,Nematodo,Patron}{Service,dto}*.java | puedeEliminar + 409 (solo Plaga tiene 409 completo) |
+| ackend/src/test/.../UsuarioResourceTest.java | +2 tests deps/eliminar |
+| ackend/src/test/.../CatalogoCrudResourceTest.java | +4 tests deps/eliminar |
+| mobile/src/services/ApiClient.ts | UsuarioDto.puedeEliminar, CatalogoItemDto.puedeEliminar, listarLotes(fundoId?) |
+| mobile/src/components/CatalogoCrudTab.tsx | Botón "Eliminar"/trash-can-outline con hide esActivo && item.puedeEliminar !== false; textos ConfirmDialog |
+| mobile/src/components/CatalogoLecturaTab.tsx | **Nuevo** — tab solo lectura Fundos/Variedades/Lotes |
+| mobile/src/screens/CatalogosScreen.tsx | CatalogoTab +3; TABS_ADMIN (9) y TABS_LECTURA (4); barra siempre visible; botón Eliminar en Usuarios; dispatch a CatalogoLecturaTab |
+| mobile/__tests__/CatalogosScreen.test.tsx | +6 tests v1.16.0 (24/24 PASS) |
+| mobile/package.json | "version": "1.16.0" |
+| mobile/src/constants/appVersion.ts | APP_VERSION = '1.16.0' |
+| mobile/versionHistory.js | Entrada v1.16.0 |
+| mobile/android/app/build.gradle | ersionName "1.16.0" / ersionCode 24 |
+| AGENTS.md · README.md ·  4_implementacion.md | Conteos y entrada de versión |
+
+## 84.3 Verificación
+
+| Comando | Resultado |
+|---|---|
+| mvn clean test (backend) | ✅ **140 tests, 0 fallas** |
+| 
+pm run lint (mobile) | ✅ **0 errores** (11 warnings pre-existentes de 
+o-bitwise en 	oken.ts) |
+| 
+px jest --runInBand (mobile) | ⚠️ **159 tests: 144 pass / 15 fail** — las 23 suites corren; **sin regresiones**; los 15 fallos son latentes pre-existentes en 7 suites sin tocar (lows/ciclo-entrega, lows/requerimiento, NuevoRequerimiento, ProgramacionEdicion, Perfil, Home, CambiarPassword) — requieren tarea separada |
+| 
+px jest CatalogosScreen | ✅ **24/24 PASS** (18 previos + 6 nuevos) |
+
+**Nota Ley 5**: los 15 fallos latentes no fueron introducidos por este cambio. Documentados
+aquí; no se tocaron en silencio.
+
+**Fix Console Ninja**: la extensión VS Code wallabyjs.console-ninja tenía
+RequerimientoFormScreen.test.tsx en ilesToInstrument (reason: "search") e inyectaba
+wrappers oo_* en cada console.log del archivo al ser leído por Jest, lo que rompía
+abel-plugin-jest-hoist (Invalid variable access: oo_oo dentro del factory de
+jest.mock). Fix: removido de ilesToInstrument, removido jest de 	oolsToAutoPatch,
+unpatch de mobile/node_modules/jest/bin/jest.js y jest-runner/build/testWorker.js.
+El test pasa de forma confiable (3/3 runs solo + PASS en suite completa).

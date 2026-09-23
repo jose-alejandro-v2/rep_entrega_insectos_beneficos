@@ -70,9 +70,9 @@ README.md
 docker-compose.yml              (proyecto `repo_registro_insectos_beneficos`: postgres:16 + backend + nginx)
 nginx/nginx.conf                (proxy 8080 → backend:6113)
 backend/                     (API Quarkus v2 — auth/usuarios bajo /api/v1, Flyway V1-V25, Dockerfile multi-stage,
-                              102 tests; imagen `repo_registro_insectos_beneficos-backend`, TZ America/Lima)
+                              140 tests; imagen `repo_registro_insectos_beneficos-backend`, TZ America/Lima)
 mobile/                      (React Native CLI 0.86 / React 19.2.3 — auth v2: login 3 pasos,
-                              ApiClient.ts + keychain, ServerCheck/Settings, 127 tests)
+                              ApiClient.ts + keychain, ServerCheck/Settings, 159 tests)
 web/                         (React + Vite — pendiente de scaffold)
 docs_implementacion/
 ├── _perfiles/
@@ -97,10 +97,11 @@ docs_implementacion/
 `backend/` es la API Quarkus v2 (auth/usuarios bajo `/api/v1`, login 3 pasos rol→usuario→DNI,
 tabla `roles` + `usuarios.rol_id` V3, Super Admin id=1 inmune, 32 tests con Testcontainers,
 multi-select lotes/plagas V19 + fotos BYTEA en BD V20 + email de usuarios V23
-(notificaciones SMTP), 102 tests con Testcontainers);
+(notificaciones SMTP), CRUD catálogos simples (sin migración: tablas preexistentes V6-V9),
+140 tests con Testcontainers);
 `mobile/` es la app RN CLI v2 (`src/services/ApiClient.ts` → `/api/v1`, token y URL en SecureStore
 vía keychain, ServerCheck/Settings de URL runtime, login 3 pasos, NotificationService FCM,
-NotificacionesScreen, 145 tests).
+NotificacionesScreen, 159 tests).
 **HITO-001 = Infraestructura base** (cerrado) y **HITO-002 = Auth v2** (ver §7).
 El backend corre dockerizado (compose proyecto `repo_registro_insectos_beneficos`): postgres:16 +
 imagen `repo_registro_insectos_beneficos-backend` (puerto 6113) + nginx (proxy 8080 → 6113),
@@ -304,6 +305,38 @@ y reportar al Orchestrator; no "arreglarlo" en silencio.
   dispara diálogos al solo checar. Re-validación al volver de background (AppState → active).
   "Continuar" bloqueado hasta que ambos permisos estén granted.
   Versión **1.14.5** / versionCode 22. Mobile: 145 tests · Backend: 102 tests (0 fallas).
+- **v1.15.0 (2026-09-22) = CRUD de catálogos simples + fix suite Jest**: alta/edición/
+  desactivación/reactivación de **Especies, Nematodos, Plagas y Patrones** con la misma
+  experiencia del tab Usuarios. Backend: CRUD genérico en `/api/v1/{especies|nematodos|
+  plagas|patrones}` (GET público; POST/PUT/DELETE Admin/Super Admin, soft delete con
+  `MensajeResponse`, validación de nombre duplicado). Mobile: CRUD **genérico** en
+  `ApiClient` (`listarCatalogo`/`crearCatalogo`/`actualizarCatalogo`/`eliminarCatalogo`)
+  + componente compartido `CatalogoCrudTab` parametrizado por endpoint (decisión DRY:
+  4 funciones y 1 componente, no 16 y 4); 6 tabs en `CatalogosScreen` (solo
+  `puedeGestionar`, fila `ScrollView horizontal`). **Fix infra Jest**: mocks de
+  `@react-native-firebase/messaging` y `@notifee/react-native` en `jest.setup.js`
+  (18 suites ESM ahora corren; ver §83.3 para los 15 fallos latentes pre-existentes).
+  Versión **1.15.0** / versionCode 23. Backend: 134 tests (0 fallas) · Mobile:
+  153 tests (138 pass / 15 latentes; CatalogosScreen 18/18 PASS).
+- **v1.16.0 (2026-09-23) = Eliminar con dependencias + tabs lectura Fundos/Variedades/Lotes**:
+  Botón **"Eliminar"** en Usuarios y catálogos Especies/Nematodos/Plagas/Patrones que
+  **solo se muestra si no hay dependencias** (flag `puedeEliminar` en DTOs; hide en UI si
+  `puedeEliminar === false`). Backend: `DependenciasService` con conteos batch
+  (`Set<Long>` en `listar()`, counts unitarios en operaciones puntuales) + 409
+  `REGISTRO_CON_DEPENDENCIAS` en `eliminar()` (tras los 400) y transición
+  ACTIVO→INACTIVO en `actualizar()`. Usuarios: deps = `creadoPor` SOLO en
+  requerimientos/despachos/recepciones/liberaciones/cumplimiento (EXCLUIR notificaciones,
+  dispositivos_tokens, usuarios.creado_por). Catálogos: deps = usos en programaciones/
+  requerimientos. **Nuevo tab solo lectura** `CatalogoLecturaTab` para Fundos, Variedades
+  y Lotes: Admin ve **9 tabs** (Usuarios, Perfiles, Especies, Nematodos, Plagas, Patrones,
+  Fundos, Variedades, Lotes); no-admin ve **4 tabs** (Perfiles, Fundos, Variedades, Lotes).
+  Barra de tabs siempre visible; `listarLotes(fundoId?)` en ApiClient.
+  Dialogs de confirmación diferenciados (usuario vs catálogo).
+  **Fix Console Ninja**: extensión VS Code inyectaba `oo_*` en `console.log` de
+  `RequerimientoFormScreen.test.tsx` (rompía `jest.mock` hoisting); removido de
+  `filesToInstrument` + unpatch de `jest.js`/`testWorker.js`.
+  Versión **1.16.0** / versionCode 24. Backend: 140 tests (0 fallas) · Mobile:
+  159 tests (144 pass / 15 latentes en 7 suites sin tocar; CatalogosScreen 24/24 PASS).
 - Los hitos se cierran con **auditoría integral PASS + verificación + `05_hito_NNN.md` + commit** coherente.
 - `versionHistory.js` es la fuente del historial visible al usuario (mobile existente); web la adoptará.
 

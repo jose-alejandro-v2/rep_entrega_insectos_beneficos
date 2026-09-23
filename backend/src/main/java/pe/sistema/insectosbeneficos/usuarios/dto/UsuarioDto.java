@@ -26,4 +26,6 @@ public class UsuarioDto {
     public Instant createdAt;
     public Instant updatedAt;
     public Instant lastLoginAt;
+    /** False si es seed, la propia cuenta o tiene registros operativos (v1.16.0). */
+    public boolean puedeEliminar;
 }

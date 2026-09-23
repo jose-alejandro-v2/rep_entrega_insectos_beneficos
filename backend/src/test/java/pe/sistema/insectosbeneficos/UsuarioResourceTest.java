@@ -8,17 +8,27 @@ import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.Map;
 
+import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
 import io.restassured.response.Response;
 
+import jakarta.inject.Inject;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
+import pe.sistema.insectosbeneficos.catalogos.FundoRepository;
+import pe.sistema.insectosbeneficos.catalogos.LoteRepository;
+import pe.sistema.insectosbeneficos.programacion.EspecieRepository;
+import pe.sistema.insectosbeneficos.requerimientos.Requerimiento;
+import pe.sistema.insectosbeneficos.requerimientos.RequerimientoRepository;
 import pe.sistema.insectosbeneficos.usuarios.EstadoUsuario;
 import pe.sistema.insectosbeneficos.usuarios.Usuario;
 
@@ -33,6 +43,18 @@ import pe.sistema.insectosbeneficos.usuarios.Usuario;
 @QuarkusTest
 @QuarkusTestResource(PostgresTestResource.class)
 class UsuarioResourceTest {
+
+    @Inject
+    RequerimientoRepository requerimientoRepository;
+
+    @Inject
+    FundoRepository fundoRepository;
+
+    @Inject
+    LoteRepository loteRepository;
+
+    @Inject
+    EspecieRepository especieRepository;
 
     // ------------------------------------------------------------------
     // Listado / RBAC
@@ -425,5 +447,68 @@ class UsuarioResourceTest {
 
         // Restaura el estado
         TestSupport.eliminarComoSeed(saExtraId).then().statusCode(200);
+    }
+
+    // ------------------------------------------------------------------
+    // Flag puedeEliminar + 409 por dependencias (v1.16.0)
+    // ------------------------------------------------------------------
+
+    @Test
+    void listar_puedeEliminar_seedFalse_nuevoTrue_inactivoFalse() {
+        long id = TestSupport.crearUsuarioComoSeed("flag_v2_1", "Flag V2 Uno", TestSupport.ROL_USUARIO_ID);
+
+        given().auth().oauth2(TestSupport.seedToken()).get("/api/v1/usuarios")
+                .then().statusCode(200)
+                .body("find { it.id == " + TestSupport.SEED_ID + " }.puedeEliminar", is(false))
+                .body("find { it.id == " + id + " }.puedeEliminar", is(true));
+
+        TestSupport.eliminarComoSeed(id).then().statusCode(200);
+
+        // INACTIVO -> ya no puede eliminarse de nuevo
+        given().auth().oauth2(TestSupport.seedToken()).queryParam("estado", "INACTIVO")
+                .get("/api/v1/usuarios")
+                .then().statusCode(200)
+                .body("find { it.id == " + id + " }.puedeEliminar", is(false));
+    }
+
+    @Test
+    void eliminar_conRegistrosAsociados_devuelve409_yPutTambien() {
+        long id = TestSupport.crearUsuarioComoSeed("deps_v2", "Deps V2", TestSupport.ROL_USUARIO_ID);
+
+        // Requerimiento con creadoPor = usuario (dependencia operativa)
+        QuarkusTransaction.requiringNew().run(() -> {
+            Requerimiento r = new Requerimiento();
+            r.setFecha(LocalDate.of(2026, 8, 24));
+            r.setFundo(fundoRepository.findById(1L));
+            r.setLote(loteRepository.findById(1L));
+            r.setEspecie(especieRepository.findById(1L));
+            r.setCantidad(BigDecimal.TEN);
+            r.setEstado("REGISTRADO");
+            r.setCreadoPor(id);
+            requerimientoRepository.persist(r);
+        });
+
+        // GET -> flag false
+        given().auth().oauth2(TestSupport.seedToken()).get("/api/v1/usuarios")
+                .then().statusCode(200)
+                .body("find { it.id == " + id + " }.puedeEliminar", is(false));
+
+        // DELETE -> 409 REGISTRO_CON_DEPENDENCIAS
+        given().auth().oauth2(TestSupport.seedToken()).delete("/api/v1/usuarios/" + id)
+                .then().statusCode(409).body("codigo", is("REGISTRO_CON_DEPENDENCIAS"));
+
+        // PUT INACTIVO -> mismo 409 (sin bypass por PUT)
+        Map<String, Object> body = new HashMap<>();
+        body.put("usuario", "deps_v2");
+        body.put("nombre", "Deps V2");
+        body.put("rolId", TestSupport.ROL_USUARIO_ID);
+        body.put("estado", "INACTIVO");
+        given().auth().oauth2(TestSupport.seedToken()).contentType(ContentType.JSON).body(body)
+                .put("/api/v1/usuarios/" + id)
+                .then().statusCode(409).body("codigo", is("REGISTRO_CON_DEPENDENCIAS"));
+
+        // Limpieza: quitar la dependencia -> DELETE ahora si procede (200)
+        QuarkusTransaction.requiringNew().run(() -> requerimientoRepository.delete("creadoPor = ?1", id));
+        TestSupport.eliminarComoSeed(id).then().statusCode(200);
     }
 }
