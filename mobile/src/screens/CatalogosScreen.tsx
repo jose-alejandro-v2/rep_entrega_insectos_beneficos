@@ -107,7 +107,10 @@ function formatFecha(iso: string | null | undefined): string {
   if (!iso) {
     return '—';
   }
-  const d = new Date(iso);
+  const soloFecha = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  const d = soloFecha
+    ? new Date(Number(soloFecha[1]), Number(soloFecha[2]) - 1, Number(soloFecha[3]))
+    : new Date(iso);
   if (Number.isNaN(d.getTime())) {
     return '—';
   }

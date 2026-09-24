@@ -57,12 +57,20 @@ export function esDiaEditable(fecha: Date = new Date()): boolean {
   return dia === 1 || dia === 4;
 }
 
-/** Formatea ISO → 'dd/mm/yyyy' (o '—' si inválido). */
+/** Formatea ISO → 'dd/mm/yyyy' (o '—' si inválido).
+ *
+ * `LocalDate` del backend llega como `YYYY-MM-DD` sin zona. Ese caso se
+ * interpreta como fecha civil local; los timestamps completos (`...T...Z` o
+ * con offset) siguen usando el instante habitual de JavaScript.
+ */
 export function formatFecha(iso: string | null | undefined): string {
   if (!iso) {
     return '—';
   }
-  const d = new Date(iso);
+  const soloFecha = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  const d = soloFecha
+    ? new Date(Number(soloFecha[1]), Number(soloFecha[2]) - 1, Number(soloFecha[3]))
+    : new Date(iso);
   if (Number.isNaN(d.getTime())) {
     return '—';
   }
