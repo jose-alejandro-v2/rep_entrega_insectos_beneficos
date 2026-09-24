@@ -6,6 +6,17 @@
 
 const versionHistory = [
   {
+    version: '1.17.0',
+    fecha: '2026-09-23',
+    cambios: [
+      'Fix bucle de permisos de notificaciones: la pantalla ya no vuelve a pedir permisos en cada reinicio si fueron otorgados (antes el check clasificaba mal "nunca preguntado" como bloqueado en Android 13+).',
+      'Solicitud de permisos robusta: "Otorgar todos" ahora serializa cámara → notificaciones (antes concurrente y el diálogo de notificaciones se perdía); en Android 13+ se usa el runtime permission nativo POST_NOTIFICATIONS.',
+      'Canal de notificaciones creado antes del check (evita falsos negativos en el primer arranque) y re-sincronización del estado tras cada solicitud.',
+      'Notificación multi-canal al guardar registro de producción (cumplimiento): push + in-app + correo HTML a todos los usuarios activos, excluyendo al admin que guarda (create y update).',
+      'Backend: método notificarCumplimientoRegistrado en NotificacionService + hook en CumplimientoProgramacionService.guardar() (best-effort, patrón de los eventos existentes).',
+    ],
+  },
+  {
     version: '1.16.0',
     fecha: '2026-09-23',
     cambios: [

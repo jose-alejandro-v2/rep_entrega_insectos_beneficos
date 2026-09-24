@@ -70,7 +70,7 @@ README.md
 docker-compose.yml              (proyecto `repo_registro_insectos_beneficos`: postgres:16 + backend + nginx)
 nginx/nginx.conf                (proxy 8080 → backend:6113)
 backend/                     (API Quarkus v2 — auth/usuarios bajo /api/v1, Flyway V1-V25, Dockerfile multi-stage,
-                              140 tests; imagen `repo_registro_insectos_beneficos-backend`, TZ America/Lima)
+                              142 tests; imagen `repo_registro_insectos_beneficos-backend`, TZ America/Lima)
 mobile/                      (React Native CLI 0.86 / React 19.2.3 — auth v2: login 3 pasos,
                               ApiClient.ts + keychain, ServerCheck/Settings, 159 tests)
 web/                         (React + Vite — pendiente de scaffold)
@@ -98,7 +98,7 @@ docs_implementacion/
 tabla `roles` + `usuarios.rol_id` V3, Super Admin id=1 inmune, 32 tests con Testcontainers,
 multi-select lotes/plagas V19 + fotos BYTEA en BD V20 + email de usuarios V23
 (notificaciones SMTP), CRUD catálogos simples (sin migración: tablas preexistentes V6-V9),
-140 tests con Testcontainers);
+142 tests con Testcontainers);
 `mobile/` es la app RN CLI v2 (`src/services/ApiClient.ts` → `/api/v1`, token y URL en SecureStore
 vía keychain, ServerCheck/Settings de URL runtime, login 3 pasos, NotificationService FCM,
 NotificacionesScreen, 159 tests).
@@ -337,6 +337,21 @@ y reportar al Orchestrator; no "arreglarlo" en silencio.
   `filesToInstrument` + unpatch de `jest.js`/`testWorker.js`.
   Versión **1.16.0** / versionCode 24. Backend: 140 tests (0 fallas) · Mobile:
   159 tests (144 pass / 15 latentes en 7 suites sin tocar; CatalogosScreen 24/24 PASS).
+- **v1.17.0 (2026-09-23) = Fix bucle de permisos + notificación de cumplimiento de producción**:
+  **Fix bucle de permisos de notificaciones** (mobile): `checkNotificationsPermission`
+  en Android 13+ ahora retorna `'askable'` (no `'blocked'`) cuando notifee reporta
+  DENIED sin distinción de "nunca preguntado"; se crea `CHANNEL_GENERAL` antes del
+  check (idempotente); `PermissionsScreen.requestAllPermissions` **serializa**
+  cámara → notificaciones (antes `Promise.all` perdía el diálogo); Android 13+ usa
+  `PermissionsAndroid.request(POST_NOTIFICATIONS)` nativo; recheck tras cada request.
+  **Notificación de cumplimiento de producción** (backend): nuevo evento 5
+  `notificarCumplimientoRegistrado` en `NotificacionService` — in-app + push
+  (broadcast excluyendo al que guarda) + correo HTML con tabla programado vs real y
+  % cumplimiento; hook en `CumplimientoProgramacionService.guardar()` para create y
+  update; exclusión del admin remitente en los 3 canales. Versión **1.17.0** /
+  versionCode 25. Backend: 142 tests (0 fallas) · Mobile: 158 tests
+  (143 pass / 15 latentes en 8 suites pre-existentes; lint 0 errores).
+  APK release **pendiente** (indicación: no build en esta sesión).
 - Los hitos se cierran con **auditoría integral PASS + verificación + `05_hito_NNN.md` + commit** coherente.
 - `versionHistory.js` es la fuente del historial visible al usuario (mobile existente); web la adoptará.
 

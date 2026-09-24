@@ -7,7 +7,9 @@ import jakarta.inject.Inject;
 
 import org.jboss.logging.Logger;
 
+import pe.sistema.insectosbeneficos.programacion.CumplimientoProgramacion;
 import pe.sistema.insectosbeneficos.programacion.Programacion;
+import pe.sistema.insectosbeneficos.programacion.DetalleProgramacion;
 import pe.sistema.insectosbeneficos.requerimientos.Requerimiento;
 import pe.sistema.insectosbeneficos.usuarios.EstadoUsuario;
 import pe.sistema.insectosbeneficos.usuarios.Usuario;
@@ -136,6 +138,151 @@ public class NotificacionService {
         }
         return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
                 .replace("\"", "&quot;");
+    }
+
+    // ------------------------------------------------------------------
+    // Evento 5: Cumplimiento de produccion registrado (v1.17.0)
+    // ------------------------------------------------------------------
+
+    /**
+     * Notifica por in-app + push + correo a TODOS los usuarios activos EXCEPTO
+     * al admin que guardo el registro (excludeUsuarioId), que se creo o
+     * actualizo un cumplimiento de produccion.
+     *
+     * La exclusion aplica a los 3 canales (push, in-app y correo) — decision
+     * aprobada. Best-effort: un fallo se loguea y NUNCA rompe la transaccion.
+     */
+    public void notificarCumplimientoRegistrado(CumplimientoProgramacion c, Long excludeUsuarioId) {
+        try {
+            if (c == null || c.getProgramacion() == null) {
+                return;
+            }
+            Programacion p = c.getProgramacion();
+            DetalleProgramacion d = c.getProgramacionDetalle();
+
+            String especie = p.getEspecie() != null && p.getEspecie().getNombre() != null
+                    ? p.getEspecie().getNombre()
+                    : "sin especie";
+            String periodo = p.getMes() + "/" + p.getAnio();
+            String fecha = c.getFecha() != null ? c.getFecha().toString() : "-";
+            String fechaCorta = c.getFecha() != null
+                    ? String.format("%02d/%02d/%d",
+                            c.getFecha().getDayOfMonth(), c.getFecha().getMonthValue(),
+                            c.getFecha().getYear())
+                    : "-";
+
+            // Cumplimiento % (guardar contra division por cero)
+            int totalProgramado = d != null && d.getTotal() != null ? d.getTotal() : 0;
+            int pct = totalProgramado > 0
+                    ? Math.round(c.getTotalReal() * 100f / totalProgramado)
+                    : 0;
+
+            // Quien registro (para el cuerpo del mensaje)
+            String nombreActor = "Un administrador";
+            if (excludeUsuarioId != null) {
+                Usuario actor = Usuario.findById(excludeUsuarioId);
+                if (actor != null && actor.nombre != null && !actor.nombre.isBlank()) {
+                    nombreActor = actor.nombre;
+                }
+            }
+
+            String tituloPush = "Producción registrada";
+            String mensajePush = nombreActor + " registró " + c.getTotalReal()
+                    + " millares (" + c.getPapelReal() + " papel / " + c.getSobreReal()
+                    + " sobre) para " + fecha + " — programación " + especie + "/" + periodo
+                    + ". Cumplimiento: " + pct + "%.";
+
+            String tituloCorreo = "Producción registrada — programación " + periodo
+                    + " (" + fechaCorta + ")";
+
+            // Destinatarios: activos EXCEPTO el que guardo (exclusion en los 3 canales).
+            // Null-safe: si excludeUsuarioId es null, notificar a todos los activos
+            // (mismo patron que DispositivoTokenRepository.findAllActivosExcluding).
+            List<Usuario> destinatarios;
+            if (excludeUsuarioId != null) {
+                destinatarios = Usuario.list(
+                        "estado = ?1 and id != ?2", EstadoUsuario.ACTIVO, excludeUsuarioId);
+            } else {
+                destinatarios = Usuario.list("estado = ?1", EstadoUsuario.ACTIVO);
+            }
+            if (destinatarios.isEmpty()) {
+                return;
+            }
+
+            for (Usuario u : destinatarios) {
+                // In-app
+                persistir(u.id, tituloPush, mensajePush, "CUMPLIMIENTO_REGISTRADO",
+                        "PROGRAMACION", p.getId());
+
+                // Correo (solo si tiene email; exclude ya aplicado en la query)
+                if (u.email != null && !u.email.isBlank()) {
+                    String html = construirHtmlCumplimiento(u.nombre, nombreActor, especie,
+                            periodo, fechaCorta, c, d, pct);
+                    enviarHtml(u.email, tituloCorreo, html);
+                }
+            }
+
+            // Push broadcast excluyendo al que guardo
+            pushService.enviarBroadcastExcluding(tituloPush, mensajePush, excludeUsuarioId);
+        } catch (Exception e) {
+            LOG.error("Fallo la notificacion de cumplimiento registrado", e);
+        }
+    }
+
+    /**
+     * Arma el cuerpo HTML del aviso de cumplimiento de produccion:
+     * resumen de la programacion + tabla programado vs real + % cumplimiento.
+     */
+    private String construirHtmlCumplimiento(String nombreUsuario, String nombreActor,
+            String especie, String periodo, String fechaCorta,
+            CumplimientoProgramacion c, DetalleProgramacion d, int pct) {
+        StringBuilder h = new StringBuilder();
+        h.append("<!DOCTYPE html><html lang=\"es\"><head><meta charset=\"UTF-8\"></head><body>");
+        h.append("<p>Este es solo un <b>Correo de Prueba de Aplicativo: Entrega de Insectos Benéficos...</b> </p>");
+
+        h.append("<p>Hola ").append(escapeHtml(nombreUsuario)).append(",</p>");
+        h.append("<p><strong>").append(escapeHtml(nombreActor))
+                .append("</strong> registr&oacute; el cumplimiento de producci&oacute;n para:</p>");
+
+        // Tabla resumen
+        h.append("<table border=\"1\" cellpadding=\"6\" cellspacing=\"0\" ")
+                .append("style=\"border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;\">");
+        h.append("<thead><tr style=\"background-color:#e8f5e9;\">")
+                .append("<th>Programación</th><th>Especie</th><th>Fecha</th><th>Semana</th>")
+                .append("</tr></thead><tbody>");
+        h.append("<tr>")
+                .append("<td>").append(escapeHtml(periodo)).append("</td>")
+                .append("<td>").append(escapeHtml(especie)).append("</td>")
+                .append("<td>").append(escapeHtml(fechaCorta)).append("</td>")
+                .append("<td>").append(c.getSemana()).append("</td>")
+                .append("</tr>");
+        h.append("</tbody></table>");
+
+        h.append("<br/>");
+
+        // Tabla programado vs real
+        int progPapel = d != null && d.getPapelConPostura() != null ? d.getPapelConPostura() : 0;
+        int progSobre = d != null && d.getSobreConCascarilla() != null ? d.getSobreConCascarilla() : 0;
+        int progTotal = d != null && d.getTotal() != null ? d.getTotal() : 0;
+
+        h.append("<table border=\"1\" cellpadding=\"6\" cellspacing=\"0\" ")
+                .append("style=\"border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px;\">");
+        h.append("<thead><tr style=\"background-color:#e8f5e9;\">")
+                .append("<th>Concepto</th><th>Programado</th><th>Real</th>")
+                .append("</tr></thead><tbody>");
+        h.append("<tr><td>Papel con postura</td><td>").append(progPapel)
+                .append("</td><td>").append(c.getPapelReal()).append("</td></tr>");
+        h.append("<tr><td>Sobre con cascarilla</td><td>").append(progSobre)
+                .append("</td><td>").append(c.getSobreReal()).append("</td></tr>");
+        h.append("<tr style=\"font-weight:bold;\"><td>Total</td><td>").append(progTotal)
+                .append("</td><td>").append(c.getTotalReal()).append("</td></tr>");
+        h.append("<tr><td>Cumplimiento</td><td>—</td><td>").append(pct).append("%</td></tr>");
+        h.append("</tbody></table>");
+
+        h.append("<p style=\"font-size:12px;color:#616161;\">Valores en millares.</p>");
+        h.append("<p>Revise el detalle en el aplicativo.</p>");
+        h.append("</body></html>");
+        return h.toString();
     }
 
     // ------------------------------------------------------------------

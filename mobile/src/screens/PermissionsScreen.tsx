@@ -91,6 +91,9 @@ export default function PermissionsScreen({route}: Props) {
       } else {
         setCamera('askable');
       }
+
+      // Re-sincronizar estado tras request (consistente con notificaciones)
+      await recheck();
     } catch (error) {
       console.error('[PermissionsScreen] Error requesting camera:', error);
     }
@@ -98,28 +101,66 @@ export default function PermissionsScreen({route}: Props) {
 
   const requestNotifications = async () => {
     try {
-      const messaging = getMessaging();
-      const authStatus = await requestPermission(messaging, {
-        alert: true,
-        badge: true,
-        sound: true,
-      });
-
-      if (
-        authStatus === AuthorizationStatus.AUTHORIZED ||
-        authStatus === AuthorizationStatus.PROVISIONAL
-      ) {
-        setNotifications('granted');
-      } else {
-        // DENIED en Android 13+ = toggle apagado → blocked
-        setNotifications('blocked');
-        Alert.alert(
-          'Permiso bloqueado',
-          'Las notificaciones estan desactivadas. Debe activarlas desde ' +
-            'Ajustes del sistema > Aplicaciones > Insectos Beneficos > Notificaciones.',
-          [{text: 'Entendido'}],
+      // Android 13+ (API 33): usar el runtime permission nativo POST_NOTIFICATIONS.
+      // Firebase requestPermission no muestra el dialogo de forma fiable en
+      // Android y, en combinacion con requests concurrentes de camara, el
+      // dialogo se perdia → el permiso nunca se otorgaba (bucle de permisos).
+      if (Platform.OS === 'android' && Platform.Version >= 33) {
+        const result = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
+          {
+            title: 'Permiso de Notificaciones',
+            message:
+              'Las notificaciones son necesarias para recibir alertas de ' +
+              'programaciones publicadas, requerimientos y cambios de estado.',
+            buttonNeutral: 'Preguntar despues',
+            buttonNegative: 'No permitir',
+            buttonPositive: 'Permitir',
+          },
         );
+
+        if (result === PermissionsAndroid.RESULTS.GRANTED) {
+          setNotifications('granted');
+        } else if (result === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) {
+          setNotifications('blocked');
+          Alert.alert(
+            'Permiso bloqueado',
+            'Las notificaciones estan desactivadas. Debe activarlas desde ' +
+              'Ajustes del sistema > Aplicaciones > Insectos Beneficos > Notificaciones.',
+            [{text: 'Entendido'}],
+          );
+        } else {
+          // DENIED simple: aun se puede volver a pedir
+          setNotifications('askable');
+        }
+      } else {
+        // Android <13 o iOS: Firebase messaging requestPermission
+        const messaging = getMessaging();
+        const authStatus = await requestPermission(messaging, {
+          alert: true,
+          badge: true,
+          sound: true,
+        });
+
+        if (
+          authStatus === AuthorizationStatus.AUTHORIZED ||
+          authStatus === AuthorizationStatus.PROVISIONAL
+        ) {
+          setNotifications('granted');
+        } else {
+          setNotifications('blocked');
+          Alert.alert(
+            'Permiso bloqueado',
+            'Las notificaciones estan desactivadas. Debe activarlas desde ' +
+              'Ajustes del sistema > Aplicaciones > Insectos Beneficos > Notificaciones.',
+            [{text: 'Entendido'}],
+          );
+        }
       }
+
+      // Re-sincronizar con la fuente pasiva (notifee) tras el request,
+      // en vez de confiar solo en la respuesta del dialogo.
+      await recheck();
     } catch (error) {
       console.error('[PermissionsScreen] Error requesting notifications:', error);
     }
@@ -138,7 +179,11 @@ export default function PermissionsScreen({route}: Props) {
   };
 
   const requestAllPermissions = async () => {
-    await Promise.all([requestCamera(), requestNotifications()]);
+    // SERIALIZAR (no Promise.all): Android no maneja bien dos dialogos de
+    // permiso simultaneos; el de notificaciones se perdia silenciosamente y
+    // el permiso nunca se otorgaba (bucle de permisos al reabrir la app).
+    await requestCamera();
+    await requestNotifications();
   };
 
   const canProceed = camera === 'granted' && notifications === 'granted';

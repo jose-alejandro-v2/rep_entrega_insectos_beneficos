@@ -10,8 +10,8 @@
 | Documento | 04_IMPLEMENTACION — Estado e historial de implementación |
 | Proyecto | Sistema de Control de Entrega de Insectos Benéficos |
 | Tipo Documento | SDD (historial de implementación) |
-| Estado | v1.16.0: Eliminar con dependencias (puedeEliminar + DependenciasService + 409) + tabs lectura Fundos/Variedades/Lotes (Admin 9 / resto 4); 140 tests BE, 144/15 tests MO |
-| Versión | 1.16.0 / versionCode 24 |
+| Estado | v1.17.0: Fix bucle de permisos de notificaciones (askable/serializado/POST_NOTIFICATIONS) + notificación multi-canal de cumplimiento de producción (create y update, excluye al remitente); 142 tests BE, 143/15 tests MO |
+| Versión | 1.17.0 / versionCode 25 |
 | Fecha | 2026-09-23 |
 | Responsable | Orchestrator / Developer |
 | Repositorio | C:\repos\rep_entrega_insectos_beneficos |
@@ -3730,3 +3730,83 @@ wrappers oo_* en cada console.log del archivo al ser leído por Jest, lo que rom
 jest.mock). Fix: removido de ilesToInstrument, removido jest de 	oolsToAutoPatch,
 unpatch de mobile/node_modules/jest/bin/jest.js y jest-runner/build/testWorker.js.
 El test pasa de forma confiable (3/3 runs solo + PASS en suite completa).
+
+---
+
+# 85. v1.17.0 — Fix bucle de permisos + notificación de cumplimiento de producción (2026-09-23)
+
+## 85.1 Resumen
+
+Dos entregas en una sesión:
+
+### A. Fix bucle de permisos de notificaciones (mobile)
+
+**Problema reportado**: la pantalla de permisos volvía a pedirse en cada reinicio de la
+app hasta que el usuario activaba notificaciones manualmente desde Ajustes de Android.
+
+**Causas raíz identificadas** (diagnóstico previo, Ley 1):
+1. `checkNotificationsPermission` clasificaba DENIED sin distinguir "nunca preguntado"
+   de "denegado" en Android 13+ → retornaba `'blocked'` cuando debía ser `'askable'`.
+2. `requestAllPermissions` usaba `Promise.all` → Android no maneja bien dos diálogos de
+   permiso concurrentes; el de notificaciones se perdía silenciosamente.
+3. Firebase messaging `requestPermission` no mostraba el diálogo de forma fiable en
+   Android 13+; debía usarse el runtime permission nativo `POST_NOTIFICATIONS`.
+4. `CHANNEL_GENERAL` solo se creaba en `NotificationService.initialize()` (tras grant);
+   `isChannelBlocked` sobre canal inexistente daba resultados erráticos en el 1er arranque.
+5. Tras el request no se re-sincronizaba con la fuente pasiva (notifee).
+
+**Fixes aplicados**:
+- `permissions.ts`: Android 13+ no autorizado → `'askable'` (no `'blocked'`);
+  `createChannel` idempotente antes de `isChannelBlocked`.
+- `PermissionsScreen.tsx`: requests **serializados** (cámara → notificaciones);
+  Android 13+ usa `PermissionsAndroid.request(PERMISSIONS.POST_NOTIFICATIONS)` nativo;
+  `recheck()` tras cada request para sincronizar con notifee.
+- `blocked` real solo se marca cuando el request devuelve `NEVER_ASK_AGAIN`.
+
+### B. Notificación de cumplimiento de producción (backend)
+
+Nuevo evento 5 en `NotificacionService.notificarCumplimientoRegistrado(c, excludeUsuarioId)`:
+
+| Canal | Comportamiento |
+|---|---|
+| In-app | Persiste `CUMPLIMIENTO_REGISTRADO` / `PROGRAMACION` / `programacion.id` para todos los activos EXCEPTO al que guarda |
+| Push | `enviarBroadcastExcluding` (excluye al remitente) |
+| Correo HTML | A activos con email EXCEPTO al remitente (exclusión en los 3 canales) |
+
+- Hook en `CumplimientoProgramacionService.guardar()`: se notifica en **create y update**
+  (decisión aprobada: ambos).
+- Contenido: título "Producción registrada"; cuerpo con actor, total/papel/sobre, fecha,
+  especie/periodo y % cumplimiento; correo con tablas resumen + programado vs real.
+- Best-effort: `try/catch` + log; nunca rompe la transacción (patrón existente).
+- Null-safe en `excludeUsuarioId` (mismo patrón que `DispositivoTokenRepository`).
+
+## 85.2 Archivos modificados / creados
+
+| Archivo | Cambio |
+|---|---|
+| mobile/src/utils/permissions.ts | askable en Android 13+; createChannel antes del check |
+| mobile/src/screens/PermissionsScreen.tsx | serializar requests; POST_NOTIFICATIONS nativo; recheck tras request |
+| backend/.../notificaciones/NotificacionService.java | + notificarCumplimientoRegistrado + construirHtmlCumplimiento (Evento 5) |
+| backend/.../programacion/CumplimientoProgramacionService.java | Hook notificación en create y update de guardar() |
+| backend/src/test/.../NotificacionMailerTest.java | +2 tests (exclusión remitente; create+update notifican) |
+| mobile/package.json | "version": "1.17.0" |
+| mobile/src/constants/appVersion.ts | APP_VERSION = '1.17.0' |
+| mobile/versionHistory.js | Entrada v1.17.0 |
+| mobile/android/app/build.gradle | versionName "1.17.0" / versionCode 25 |
+| AGENTS.md · README.md · 04_implementacion.md | Conteos y entrada de versión |
+
+## 85.3 Verificación
+
+| Comando | Resultado |
+|---|---|
+| mvn test (backend) | ✅ **142 tests, 0 fallas** (140 previos + 2 nuevos NotificacionMailerTest) |
+| npm run lint (mobile) | ✅ **0 errores** (11 warnings pre-existentes no-bitwise en token.ts) |
+| npm test -- --runInBand (mobile) | ⚠️ **158 tests: 143 pass / 15 fail** — sin regresiones; los 15 fallos son latentes pre-existentes en 8 suites (7 de §83.3 + RequerimientoFormScreen con oo_oo de Console Ninja reinyectado — pre-existente, no introducido por este cambio) |
+| APK assembleRelease | ⏭️ **NO ejecutado** (indicación explícita: "no build" en esta sesión) — pendiente para cierre de hito |
+
+**Nota Ley 5**: los fallos mobile no fueron introducidos por este cambio (los archivos
+afectados — permissions.ts, PermissionsScreen.tsx — no tienen suites dedicadas y no
+forman parte de las suites fallidas). Documentados aquí; no se tocaron en silencio.
+
+**Pendiente (Ley 3)**: APK release con versionCode 25 — reconstruir en la sesión de
+cierre del hito cuando se autorice build.

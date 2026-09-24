@@ -4,6 +4,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.core.Response;
+import pe.sistema.insectosbeneficos.notificaciones.NotificacionService;
 import pe.sistema.insectosbeneficos.programacion.dto.CumplimientoProgramacionDto;
 import pe.sistema.insectosbeneficos.programacion.dto.GuardarCumplimientoRequest;
 import pe.sistema.insectosbeneficos.seguridad.ActualUsuario;
@@ -21,6 +22,7 @@ public class CumplimientoProgramacionService {
     @Inject ProgramacionRepository programacionRepository;
     @Inject DetalleProgramacionRepository detalleProgramacionRepository;
     @Inject ActualUsuario actualUsuario;
+    @Inject NotificacionService notificacionService;
 
     public List<CumplimientoProgramacionDto> listarPorProgramacion(Long programacionId) {
         // Verificar que la programación existe
@@ -64,6 +66,8 @@ public class CumplimientoProgramacionService {
             existente.setSobreReal(req.getSobreReal());
             existente.setTotalReal(totalReal);
             existente.setUpdatedAt(Instant.now());
+            // Notificar update (ambos create y update notifican — decision aprobada)
+            notificacionService.notificarCumplimientoRegistrado(existente, actualUsuario.getId());
             return toDto(existente);
         } else {
             // Crear nuevo
@@ -79,6 +83,8 @@ public class CumplimientoProgramacionService {
             entity.setCreatedAt(Instant.now());
             entity.setUpdatedAt(Instant.now());
             cumplimientoRepository.persist(entity);
+            // Notificar create (ambos create y update notifican — decision aprobada)
+            notificacionService.notificarCumplimientoRegistrado(entity, actualUsuario.getId());
             return toDto(entity);
         }
     }

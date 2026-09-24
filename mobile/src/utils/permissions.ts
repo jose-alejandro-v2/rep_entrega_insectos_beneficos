@@ -13,7 +13,7 @@
 
 import {Platform} from 'react-native';
 import {PermissionsAndroid} from 'react-native';
-import notifee, {AuthorizationStatus} from '@notifee/react-native';
+import notifee, {AuthorizationStatus, AndroidImportance} from '@notifee/react-native';
 import {CHANNEL_GENERAL} from '../services/NotificationService';
 
 export type PermissionState = 'granted' | 'askable' | 'blocked';
@@ -64,6 +64,18 @@ export async function checkNotificationsPermission(): Promise<PermissionState> {
   }
 
   try {
+    // Asegurar que el canal exista ANTES de isChannelBlocked: en el primer
+    // arranque el canal aún no fue creado por NotificationService.initialize()
+    // y isChannelBlocked sobre canal inexistente puede fallar o dar falsos.
+    // createChannel es idempotente (si ya existe, no hace nada).
+    await notifee.createChannel({
+      id: CHANNEL_GENERAL,
+      name: 'Notificaciones generales',
+      importance: AndroidImportance.HIGH,
+      vibration: true,
+      sound: 'default',
+    });
+
     const settings = await notifee.getNotificationSettings();
     const authStatus = settings.authorizationStatus;
 
@@ -76,18 +88,19 @@ export async function checkNotificationsPermission(): Promise<PermissionState> {
       return channelBlocked ? 'blocked' : 'granted';
     }
 
-    // DENIED puede significar "aún no preguntado" (NOT_DETERMINED) o
-    // "el usuario dijo no" o "permanentemente bloqueado".
-    // En Android 13+, DENIED con POST_NOTIFICATIONS = toggle apagado.
-    // En Android <13, authorizationStatus siempre es DENIED o AUTHORIZED
-    // (no hay POST_NOTIFICATIONS); si canales no bloqueados → granted.
+    // En Android <13 no hay POST_NOTIFICATIONS; authorizationStatus puede
+    // ser DENIED/AUTHORIZED. Si canales no bloqueados → granted.
     if (Platform.Version < 33) {
       const channelBlocked = await notifee.isChannelBlocked(CHANNEL_GENERAL);
       return channelBlocked ? 'blocked' : 'granted';
     }
 
-    // Android 13+ y DENIED → toggle de notificaciones apagado → blocked
-    return 'blocked';
+    // Android 13+ y no autorizado: notifee en Android solo devuelve DENIED
+    // (no distingue "nunca preguntado" de "denegado"). Tratamos como
+    // 'askable' para mostrar "Otorgar"; el estado 'blocked' real se detecta
+    // tras un request que devuelve NEVER_ASK_AGAIN (PermissionsScreen).
+    // Antes se retornaba 'blocked' aquí y el bucle de permisos no avanzaba.
+    return 'askable';
   } catch {
     return 'askable';
   }

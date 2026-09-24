@@ -49,7 +49,7 @@ mobile/       App React Native CLI 0.86 / React 19.2.3 — auth v2 (login 3 paso
               cumplimiento de producción), Requerimientos (multi-select lotes/plagas, evidencia de entrega
               en estado Aprobado), Catálogos (Usuarios con correo electrónico), CRUD de catálogos simples
               + Eliminar con dependencias + tabs lectura Fundos/Variedades/Lotes
-              + hook usePhotoCapture, notificaciones in-app + FCM — versión 1.16.0
+              + hook usePhotoCapture, notificaciones in-app + FCM — versión 1.17.0
 web/          Frontend React + Vite (pendiente de scaffold)
 docs_implementacion/
 ├── _sdd/                      Especificación, plan, tareas e implementación
@@ -204,6 +204,14 @@ docs_implementacion/
   barra de tabs siempre visible. Versión **1.16.0** / versionCode 24. Backend: 140 tests
   (0 fallas) · Mobile: 159 tests (144 pass / 15 fallos latentes en 7 suites sin tocar;
   CatalogosScreen 24/24 PASS).
+- **v1.17.0 (2026-09-23) = Fix bucle de permisos + notificación de cumplimiento**:
+  fix del bucle de permisos de notificaciones (clasificación `askable` en Android 13+,
+  requests serializados, `POST_NOTIFICATIONS` nativo, canal creado antes del check);
+  notificación multi-canal (push + in-app + correo HTML) al guardar o actualizar un
+  registro de cumplimiento de producción, excluyendo al admin que guarda.
+  Versión **1.17.0** / versionCode 25. Backend: 142 tests (0 fallas) · Mobile:
+  158 tests (143 pass / 15 fallos latentes pre-existentes; lint 0 errores).
+  APK release pendiente (no build en esta sesión).
 - **Pendientes**: frontend web (React/Vite) y CI/CD (GitHub Actions).
   Ver [`docs_implementacion/_sdd/`](docs_implementacion/_sdd/).
 

@@ -1,8 +1,8 @@
 /**
  * appVersion.ts — Versión visible del aplicativo mobile (HITO-003, Ley 3).
  *
- * Debe coincidir EXACTAMENTE con `package.json` (version 1.16.0),
- * `android/app/build.gradle` (versionName 1.16.0 / versionCode 24) y con la
- * entrada `1.16.0` de `versionHistory`. Se expone en PerfilScreen.
+ * Debe coincidir EXACTAMENTE con `package.json` (version 1.17.0),
+ * `android/app/build.gradle` (versionName 1.17.0 / versionCode 25) y con la
+ * entrada `1.17.0` de `versionHistory`. Se expone en PerfilScreen.
  */
-export const APP_VERSION = '1.16.0';
+export const APP_VERSION = '1.17.0';

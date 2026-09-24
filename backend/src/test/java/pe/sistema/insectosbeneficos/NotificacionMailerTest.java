@@ -117,4 +117,134 @@ public class NotificacionMailerTest {
 
         assertThat(mailbox.getTotalMessagesSent(), is(0));
     }
+
+    // ------------------------------------------------------------------
+    // Evento 5 (v1.17.0): guardar cumplimiento de produccion
+    // ------------------------------------------------------------------
+
+    @Test
+    public void guardarCumplimiento_notificaAOtrosUsuariosYExcluyeAlQueGuarda() {
+        // Usuario activo con email que SI debe recibir
+        Map<String, Object> destinatario = crearUsuarioConEmail(
+                "sanidad_cumpl_v1", "sanidad.cumpl@vanguardfresh.pe", TestSupport.ROL_USUARIO_ID);
+        given().auth().oauth2(TestSupport.seedToken()).contentType(ContentType.JSON).body(destinatario)
+                .post("/api/v1/usuarios").then().statusCode(201);
+
+        // Admin con email que TAMBIEN debe recibir (todos los activos excepto el que guarda)
+        Map<String, Object> adminDest = crearUsuarioConEmail(
+                "admin_cumpl_dest_v1", "admin.dest@vanguardfresh.pe", TestSupport.ROL_ADMIN_ID);
+        given().auth().oauth2(TestSupport.seedToken()).contentType(ContentType.JSON).body(adminDest)
+                .post("/api/v1/usuarios").then().statusCode(201);
+
+        // Admin con email que GUARDA el cumplimiento → NO debe recibir (exclusion)
+        Map<String, Object> adminGuarda = crearUsuarioConEmail(
+                "admin_cumpl_guarda_v1", "admin.guarda@vanguardfresh.pe", TestSupport.ROL_ADMIN_ID);
+        long adminGuardaId = given().auth().oauth2(TestSupport.seedToken())
+                .contentType(ContentType.JSON).body(adminGuarda)
+                .post("/api/v1/usuarios").then().statusCode(201)
+                .extract().jsonPath().getLong("id");
+
+        // Login del admin que guarda (password default del sistema)
+        String tokenGuarda = TestSupport.localLoginToken(adminGuardaId, "00000000");
+
+        // Crear programacion (anio/mes unicos para no colisionar)
+        int anio = 2095;
+        int mes = 4;
+        given().auth().oauth2(TestSupport.seedToken()).contentType(ContentType.JSON)
+                .body(Map.of("anio", anio, "mes", mes, "especieId", 1))
+                .post("/api/v1/programaciones").then().statusCode(201);
+
+        long progId = given().auth().oauth2(TestSupport.seedToken())
+                .get("/api/v1/programaciones?anio=" + anio + "&mes=" + mes)
+                .then().statusCode(200)
+                .extract().jsonPath().getLong("[0].id");
+
+        long detalleId = given().auth().oauth2(TestSupport.seedToken())
+                .get("/api/v1/programaciones/" + progId)
+                .then().statusCode(200)
+                .extract().jsonPath().getLong("detalles[0].id");
+
+        // Guardar cumplimiento con el admin que tiene email (excluido)
+        given().auth().oauth2(tokenGuarda).contentType(ContentType.JSON)
+                .body(Map.of(
+                        "programacionDetalleId", detalleId,
+                        "semana", 1,
+                        "fecha", "2026-09-01",
+                        "papelReal", 300,
+                        "sobreReal", 150))
+                .when().put("/api/v1/programaciones/" + progId + "/cumplimiento")
+                .then().statusCode(200);
+
+        // Destinatarios con email (rol Usuario y Admin) SI reciben
+        List<Mail> mailsSanidad = mailbox.getMessagesSentTo("sanidad.cumpl@vanguardfresh.pe");
+        assertThat(mailsSanidad, not(empty()));
+        assertThat(mailsSanidad.get(0).getSubject(), containsString("Producción registrada"));
+        String html = mailsSanidad.get(0).getHtml();
+        assertThat(html, containsString("<table"));
+        assertThat(html, containsString("Programación"));
+        assertThat(html, containsString("Programado"));
+        assertThat(html, containsString("Cumplimiento"));
+        assertThat(html, containsString("Valores en millares"));
+
+        List<Mail> mailsAdminDest = mailbox.getMessagesSentTo("admin.dest@vanguardfresh.pe");
+        assertThat(mailsAdminDest, not(empty()));
+
+        // El admin que GUARDO NO recibe (exclusion en los 3 canales)
+        assertThat(mailbox.getMessagesSentTo("admin.guarda@vanguardfresh.pe"), empty());
+    }
+
+    @Test
+    public void guardarCumplimiento_updateTambienNotifica() {
+        // Usuario con email
+        Map<String, Object> dest = crearUsuarioConEmail(
+                "sanidad_cumpl_upd_v1", "sanidad.upd@vanguardfresh.pe", TestSupport.ROL_USUARIO_ID);
+        given().auth().oauth2(TestSupport.seedToken()).contentType(ContentType.JSON).body(dest)
+                .post("/api/v1/usuarios").then().statusCode(201);
+
+        // Programacion (anio/mes unicos)
+        int anio = 2095;
+        int mes = 5;
+        given().auth().oauth2(TestSupport.seedToken()).contentType(ContentType.JSON)
+                .body(Map.of("anio", anio, "mes", mes, "especieId", 1))
+                .post("/api/v1/programaciones").then().statusCode(201);
+
+        long progId = given().auth().oauth2(TestSupport.seedToken())
+                .get("/api/v1/programaciones?anio=" + anio + "&mes=" + mes)
+                .then().statusCode(200)
+                .extract().jsonPath().getLong("[0].id");
+
+        long detalleId = given().auth().oauth2(TestSupport.seedToken())
+                .get("/api/v1/programaciones/" + progId)
+                .then().statusCode(200)
+                .extract().jsonPath().getLong("detalles[0].id");
+
+        // 1ra vez: create → notifica
+        given().auth().oauth2(TestSupport.seedToken()).contentType(ContentType.JSON)
+                .body(Map.of(
+                        "programacionDetalleId", detalleId,
+                        "semana", 1,
+                        "fecha", "2026-09-01",
+                        "papelReal", 100,
+                        "sobreReal", 50))
+                .when().put("/api/v1/programaciones/" + progId + "/cumplimiento")
+                .then().statusCode(200);
+        assertThat(mailbox.getMessagesSentTo("sanidad.upd@vanguardfresh.pe"), not(empty()));
+
+        mailbox.clear();
+
+        // 2da vez: update → notifica de nuevo (ambos create y update)
+        given().auth().oauth2(TestSupport.seedToken()).contentType(ContentType.JSON)
+                .body(Map.of(
+                        "programacionDetalleId", detalleId,
+                        "semana", 1,
+                        "fecha", "2026-09-01",
+                        "papelReal", 200,
+                        "sobreReal", 80))
+                .when().put("/api/v1/programaciones/" + progId + "/cumplimiento")
+                .then().statusCode(200)
+                .body("papelReal", is(200))
+                .body("sobreReal", is(80));
+
+        assertThat(mailbox.getMessagesSentTo("sanidad.upd@vanguardfresh.pe"), not(empty()));
+    }
 }
